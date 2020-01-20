@@ -9,10 +9,10 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-__all__ = ["FieldGetter"]
+__all__ = ["Getter"]
 
 
-class FieldGetter:
+class Getter:
     """
     FieldGetter provides a powerful way to access that attributes of JSON-like data and perform
     manipulations on them. The `field` notation is listed below by the constructor.
@@ -56,7 +56,7 @@ class FieldGetter:
         "abs": lambda value: abs(value),
         "distance": lambda value, other: math.sqrt(sum((a-b)**2 for a, b in zip(value, other))),
         "math": lambda value, attr: getattr(math, attr)(value),
-        "round": lambda value, r=2: round(float(value), r),
+        "round": lambda value, n=2: round(float(value), n),
 
         # string
         "prefix": lambda value, prefix: f"{prefix}{value}",
@@ -74,7 +74,7 @@ class FieldGetter:
         "range": lambda value, start, end=None: value[start: end if end is not None else len(value)],
     }
 
-    _specials["map"] = lambda value, special, *args: [FieldGetter._specials[special](v, *args) for v in value]
+    _specials["map"] = lambda value, special, *args: [Getter._specials[special](v, *args) for v in value]
 
     def __init__(self, field: str, convert_ints=True, fallback=None):
         """
@@ -181,5 +181,4 @@ class FieldGetter:
 
 
 if __name__ == "__main__":
-    print(FieldGetter('email.ip.$split(".").$index(-1).$set'))
-    FieldGetter("email")
+    pass

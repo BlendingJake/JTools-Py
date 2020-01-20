@@ -1,5 +1,5 @@
 from typing import Union, List, Dict, Any
-from field_getter import FieldGetter
+from getter import Getter
 import logging
 
 logging.basicConfig()
@@ -108,7 +108,7 @@ class Key:
     def none(self, other):
         return Condition(self.field, "null", other)
 
-    def not_null(self, other):
+    def not_none(self, other):
         return Condition(self.field, "!null", other)
 
 
@@ -143,7 +143,7 @@ class Filter:
         self.getters = self._preprocess(self.filters, convert_ints)
         logger.debug(self.getters)
 
-    def _preprocess(self, filters, convert_ints=True) -> Dict[str, FieldGetter]:
+    def _preprocess(self, filters, convert_ints=True) -> Dict[str, Getter]:
         out = {}
         for f in filters:
             if isinstance(f, list):
@@ -151,7 +151,7 @@ class Filter:
             elif "or" in f:
                 out.update(self._preprocess(f["or"], convert_ints))
             elif f["field"] not in out:
-                out[f["field"]] = FieldGetter(f["field"], convert_ints=convert_ints)
+                out[f["field"]] = Getter(f["field"], convert_ints=convert_ints)
 
         return out
 
@@ -197,12 +197,4 @@ class Filter:
 
 
 if __name__ == "__main__":
-    import json
-    from exectiming.exectiming import StaticTimer
-    import json
-    import ast
-
-    # mock data from https://www.sitepoint.com/test-data-json-example/
-    with open("./test_data.json") as file:
-        raw = file.read()
-        test = json.loads(raw)
+    pass

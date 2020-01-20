@@ -1,4 +1,4 @@
-from field_getter import FieldGetter
+from getter import Getter
 import re
 from typing import Union, Dict, Callable
 import logging
@@ -7,11 +7,11 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-__all__ = ["FieldFormatter"]
+__all__ = ["Formatter"]
 
 
-class FieldFormatter:
-    _full_replacement = r"(?!\\){\s*" + FieldGetter.full_regex() + r"\s*(?<!\\)}"
+class Formatter:
+    _full_replacement = r"(?!\\){\s*" + Getter.full_regex() + r"\s*(?<!\\)}"
     _replacement_pattern = re.compile(_full_replacement)
 
     logger.debug(f"Full Replacement: {_full_replacement}")
@@ -44,24 +44,8 @@ class FieldFormatter:
         if groups[1]:
             field += groups[1]
 
-        return str(FieldGetter(field).get(item))
+        return str(Getter(field).get(item))
 
 
 if __name__ == "__main__":
-    import json
-
-    # mock data from https://www.sitepoint.com/test-data-json-example/
-    with open("./test_data.json") as file:
-        test = json.loads(file.read())
-
-    single = {
-        "a": {
-            "Process Error": "Ralph",
-            "Micro Error": "Barb"
-        },
-        "b": [4, 6],
-        "c": 3
-    }
-
-    FieldGetter.register_special("adder", lambda value, *args: value + sum(args))
-    print(FieldFormatter('{a.$items.$map("join", ": \\n\\t").$join("\\n")}').format(single))
+    pass

@@ -1,5 +1,5 @@
-from .field_getter import FieldGetter
+from .getter import Getter
 from .filter import Key, Condition, Filter
-from .formatter import FieldFormatter
+from .formatter import Formatter
 
-__all__ = ["FieldGetter", "Key", "Condition", "Filter", "FieldFormatter"]
+__all__ = ["Getter", "Key", "Condition", "Filter", "Formatter"]
