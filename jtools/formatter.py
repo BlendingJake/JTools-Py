@@ -1,7 +1,8 @@
-from getter import Getter
+from .getter import Getter
 import re
-from typing import Union, Dict, Callable
+from typing import Union
 import logging
+import json
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -11,14 +12,10 @@ __all__ = ["Formatter"]
 
 
 class Formatter:
-    _full_replacement = r"(?!\\){\s*" + Getter.full_regex() + r"\s*(?<!\\)}"
+    _full_replacement = r"{{\s*" + Getter.full_regex() + r"\s*}}"
     _replacement_pattern = re.compile(_full_replacement)
 
     logger.debug(f"Full Replacement: {_full_replacement}")
-
-    _transformers: Dict[str, Callable] = {
-
-    }
 
     def __init__(self, spec: str):
         self.spec = spec
@@ -44,8 +41,14 @@ class Formatter:
         if groups[1]:
             field += groups[1]
 
-        return str(Getter(field).get(item))
+        result = Getter(field).get(item)
+        if isinstance(result, (list, dict)):
+            return json.dumps(result)
+        else:
+            return result
 
 
 if __name__ == "__main__":
-    pass
+    item = {"email": "john_doe@gmail.com"}
+
+    print(Formatter('Generic Email: {{  email.$replace("{{  email.$split("@").1.$split(".").0  }}", "<domain>")  }}').format(item))

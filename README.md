@@ -78,6 +78,7 @@ Math / Numbers
 Strings
   * `$prefix(prefix) -> str`: Prefix the value with the specified string
   * `$suffix(suffix) -> str`: Concatenate a string to the end of the value
+  * `$strip -> str`: Strip leading an trailing whitespace
   * `$replace(old, new) -> str`: Replace all occurrences of a string 
   * `$trim(length=50, suffix="...") -> str`: Trim the length of a string
   * `$split(on=" ") -> List[str]`: Split a string
@@ -94,15 +95,17 @@ Lists
 ## <a name="formatter">Formatter</a>
 > `Formatter` allows fields to be taken from an object and then formatted
 >into a string. The basic usage is `Formatter(<spec>).format(<item>)`.
->Fields to be replaced should be wrapped in `{}` and the
+>Fields to be replaced should be wrapped in `{{}}` and the
 >field options listed above for `Getter` are all valid. For example, 
->`Formatter('Name: {name}').format({"name": "John Smith"})` results in
+>`Formatter('Name: {{name}}').format({"name": "John Smith"})` results in
 >`Name: John Smith`. 
 
  * The field specification from `Getter` is valid here, so the above example
  could instead be `'First Name: {name.$split(" ").0}'` to get `First Name: John`
  instead.
  * **Field paths can be nested!!!!**
+ * Whitespace is allowed inside of the curly braces before and after the field query string. 
+ `{{   a  }}` is just as valid as `{{a}}`. 
  
 Example (flattening operations):
 ```python
@@ -133,12 +136,20 @@ item = {
 }
 
 Formatter(
-    "Midpoint: [{x2.$subtract({x1}).$divide(2)}, {y2.$subtract({y1}).$divide(2)}]"
+    "Midpoint: [{{x2.$subtract({{x1}}).$divide(2)}}, {y2.$subtract({{y1}}).$divide(2)}}]"
 )
 # Midpoint: [5.5, 26.5]
 ```
 >Additionally, the speed of formatting is very quick. The above statement 
 >can be preformed 10,000 times in around 0.75 seconds.
+
+**IMPORTANT:** Nested fields that return strings which are then used as arguments 
+must be manually double-quoted. For example, lets say we want to replace the domain `gmail`
+with `<domain>` in `item = {"email": "john_doe@gmail.com"}`. We want to determine the 
+current domain, which we can do with `email.$split("@").1.$split(".").0`, and then
+we want to pass that as an argument into `$replace`. To do so, we need surround the nested
+field with double-quotes so it will be properly recognized as an argument in the replace special.
+`Formatter('Generic Email: {{  email.$replace("{{  email.$split("@").1.$split(".").0  }}", "<domain>")  }}').format(item)"`
 
 ## <a name="filter">Filter</a>
 >`Filter` takes the field extraction capabilities of `Getter` and combines them with 

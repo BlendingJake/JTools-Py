@@ -17,7 +17,7 @@ class Getter:
     FieldGetter provides a powerful way to access that attributes of JSON-like data and perform
     manipulations on them. The `field` notation is listed below by the constructor.
     """
-    _arguments = r"""((?:(?:"[^"]*")|[^\){}])*)"""
+    _arguments = r"""((?:(?!{{)(?:(?:"(?!{{)[^"]*")|[^\)]))*)"""
     _func_def = r"(?:\$[a-z]+(?:\(" + _arguments + r"\))?)"
     _field = r"[-_a-zA-Z0-9]+"
     _part = r"(?:\.(" + _func_def + "|" + _field + "))"
@@ -61,6 +61,7 @@ class Getter:
         # string
         "prefix": lambda value, prefix: f"{prefix}{value}",
         "suffix": lambda value, suffix: f"{value}{suffix}",
+        "strip": lambda value: value.strip(),
         "replace": lambda value, old, new: value.replace(old, new),
         "trim": lambda value, length=50, suffix="...": value[:length-len(suffix)]+(
             suffix if len(value) > length-len(suffix) else ""
@@ -181,4 +182,4 @@ class Getter:
 
 
 if __name__ == "__main__":
-    pass
+    print(Getter("a"))

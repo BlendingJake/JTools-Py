@@ -1,5 +1,5 @@
 from typing import Union, List, Dict, Any
-from getter import Getter
+from .getter import Getter
 import logging
 
 logging.basicConfig()
@@ -163,11 +163,10 @@ class Filter:
         for f in filters:
             if isinstance(f, list):
                 c = self._filter(item, f)
+            elif "or" in f:
+                c = self._filter(item, f["or"], True)
             else:
-                if "or" not in f:
-                    c = self._filters[f["operator"]](self.getters[f["field"]].get(item), f["value"])
-                else:
-                    c = self._filter(item, f["or"], True)
+                c = self._filters[f["operator"]](self.getters[f["field"]].get(item), f["value"])
 
             if overall is None:
                 overall = c
