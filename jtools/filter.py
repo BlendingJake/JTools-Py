@@ -1,10 +1,11 @@
 from typing import Union, List, Dict, Any
 from .getter import Getter
 import logging
+from os import environ
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
 
 __all__ = ["Condition", "Key", "Filter"]
 

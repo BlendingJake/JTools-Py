@@ -4,10 +4,11 @@ import logging
 from datetime import datetime
 import math
 import json
+from os import environ
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
 
 __all__ = ["Getter"]
 
@@ -44,7 +45,9 @@ class Getter:
         "float": lambda value: float(value),
         "string": lambda value: str(value),
         "int": lambda value: int(value),
+        "not": lambda value: not value,
         "fallback": lambda value, fallback: value if value else fallback,
+        "ternary": lambda value, if_true, if_false, strict=False: if_true if value or value is True else if_false,
         "timestamp": lambda value, fmt="%Y-%m-%dT%H:%M:%SZ": datetime.utcfromtimestamp(value).strftime(fmt),
 
         # math / numeric

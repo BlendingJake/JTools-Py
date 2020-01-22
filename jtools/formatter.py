@@ -2,11 +2,12 @@ from .getter import Getter
 import re
 from typing import Union
 import logging
+from os import environ
 import json
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
 
 __all__ = ["Formatter"]
 
@@ -42,13 +43,14 @@ class Formatter:
             field += groups[1]
 
         result = Getter(field).get(item)
+        logger.debug(f"field: {field}, got: {result}")
         if isinstance(result, (list, dict)):
             return json.dumps(result)
         else:
-            return result
+            return str(result)
 
 
 if __name__ == "__main__":
     item = {"email": "john_doe@gmail.com"}
 
-    print(Formatter('Generic Email: {{  email.$replace("{{  email.$split("@").1.$split(".").0  }}", "<domain>")  }}').format(item))
+    print(Formatter("Balance: ${{balance.$subtract({{pending_charges}})}}").format({"balance": 1000, "pending_charges": 250}))

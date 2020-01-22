@@ -21,7 +21,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="jtools",
-    version="1.0.2a",
+    version="1.0.2",
     author="Jacob Morris",
     author_email="blendingjake@gmail.com",
     description="A Python module that aids filtering, formatting, and transforming JSON-like objects",
