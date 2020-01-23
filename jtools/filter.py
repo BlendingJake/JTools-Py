@@ -134,7 +134,15 @@ class Filter:
         "!null": lambda field, _: field is not None
     }
 
-    def __init__(self, filters: Union[Condition, List[dict]], convert_ints=True):
+    def __init__(self, filters: Union[Condition, List[dict]], convert_ints=True, empty_filters_response=True):
+        """
+        Prepare a filter object from a list of filters, or from a condition object
+        :param filters: The filters
+        :param convert_ints: Whether to convert anything that can be converted to int, to an int
+        :param empty_filters_response: What is returned if there are no filters. Makes the difference between
+            returning all items for empty filters, or returning none.
+        """
+        self.empty_filters_response = empty_filters_response
         if isinstance(filters, Condition):
             self.filters = filters.filters()
         else:
@@ -167,7 +175,7 @@ class Filter:
             elif "or" in f:
                 c = self._filter(item, f["or"], True)
             else:
-                c = self._filters[f["operator"]](self.getters[f["field"]].get(item), f["value"])
+                c = self._filters[f["operator"]](self.getters[f["field"]].single(item), f["value"])
 
             if overall is None:
                 overall = c
@@ -182,7 +190,7 @@ class Filter:
                 if not overall:  # shortcut and
                     return False
 
-        return False if overall is None else overall
+        return self.empty_filters_response if overall is None else overall
 
     def filter(self, items: List[Union[dict, list]]) -> List[Union[dict, list]]:
         """

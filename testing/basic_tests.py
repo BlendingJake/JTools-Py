@@ -4,7 +4,7 @@ import json
 
 # sys.path.append("../jtools")
 
-from jtools import __version__, Formatter, Filter, Key, Condition, Getter
+from jtools import __version__, Formatter, Filter, Key, Getter
 
 with open("./data/10000.json", "r") as file:
     large_data = json.loads(file.read())
@@ -14,21 +14,45 @@ with open("./data/20.json", "r") as file:
 
 
 class TestGetterBasic(unittest.TestCase):
+    def test_single_field_single(self):
+        self.assertEqual(
+            Getter("guid").single(small_data[0]),
+            "36815d53-52c2-4bd1-bfd5-34a7859cacbd"
+        )
+
+    def test_single_field_many(self):
+        self.assertEqual(
+            Getter("age").many(small_data[:3]),
+            [27, 34, 45]
+        )
+
+    def test_multiple_fields_single(self):
+        self.assertEqual(
+            Getter(["name", "email"]).single(small_data[1]),
+            ["Chang Pollard", "changpollard@greeker.com"]
+        )
+
+    def test_multiple_fields_many(self):
+        self.assertEqual(
+            Getter(["eyeColor", "gender"]).many(small_data[1:3]),
+            [["green", "male"], ["brown", "male"]]
+        )
+
     def test_list_map(self):
         self.assertEqual(
-            Getter("friends.0.name").get(small_data[0]),
+            Getter("friends.0.name").single(small_data[0]),
             "Webster Green"
         )
 
     def test_split_replace_convert(self):
         self.assertEqual(
-            Getter('balance.$split("$").1.$replace(",", "").$float').get(small_data[0]),
+            Getter('balance.$split("$").1.$replace(",", "").$float').single(small_data[0]),
             3247.13
         )
 
     def test_range_replace_convert(self):
         self.assertEqual(
-            Getter('balance.$range(1).$replace(",", "").$float').get(small_data[0]),
+            Getter('balance.$range(1).$replace(",", "").$float').single(small_data[0]),
             3247.13
         )
 

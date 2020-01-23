@@ -42,7 +42,7 @@ class Formatter:
         if groups[1]:
             field += groups[1]
 
-        result = Getter(field).get(item)
+        result = Getter(field).single(item)
         logger.debug(f"field: {field}, got: {result}")
         if isinstance(result, (list, dict)):
             return json.dumps(result)

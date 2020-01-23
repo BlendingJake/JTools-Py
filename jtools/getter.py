@@ -1,4 +1,4 @@
-from typing import Union, Any, Dict, Callable
+from typing import Union, Any, Dict, Callable, List
 import re
 import logging
 from datetime import datetime
@@ -80,13 +80,14 @@ class Getter:
 
     _specials["map"] = lambda value, special, *args: [Getter._specials[special](v, *args) for v in value]
 
-    def __init__(self, field: str, convert_ints=True, fallback=None):
+    def __init__(self, field: Union[str, List[str]], convert_ints=True, fallback=None):
         """
         Create a FieldGetter for a specific field query string.
-        :param field: The field query string, formatted <field>[.<field>|.$<special>[(<arg>[, <arg>]*)]], where:
-            field: Field name from any items specified later with `.get(item)`.
-            special: Any name in the `_specials` map above
-            arg: Any JSON-formatted value. Note: JSON requires strings to be double-quoted
+        :param field: The field query string (or strings), formatted <field>[.<field>|.$<special>[(<arg>[, <arg>]*)]],
+            where:
+                field: Field name from any items specified later with `.get(item)`.
+                special: Any name in the `_specials` map above
+                arg: Any JSON-formatted value. Note: JSON requires strings to be double-quoted
 
             Examples:
                 friends.$length
@@ -97,21 +98,23 @@ class Getter:
             whether to leave them as strings.
         :param fallback: A fallback value that will be used a field cannot be found on a given object
         """
-        self.field = field
-        self.parts = []
+        self.multiple = isinstance(field, (list, tuple))
+        self.fields: List[str] = field if self.multiple else [field]
         self.fallback = fallback
         self.convert_ints = convert_ints
-        self._process_field()
+
+        self.parts: List[list] = [self._process_field(f) for f in self.fields]
 
     def __repr__(self):
         return f"Getter: {self.parts}"
 
-    def _process_field(self):
+    def _process_field(self, field):
         # splits into anchor field and then the rest of the parts
-        match = self._full_pattern.match(self.field)
+        parts = []
+        match = self._full_pattern.match(field)
         if match is not None:
             full_groups = match.groups()
-            self.parts.append(full_groups[0])  # anchor
+            parts.append(full_groups[0])  # anchor
 
             if full_groups[1]:
                 for part in self._part_pattern.findall(full_groups[1]):
@@ -126,7 +129,7 @@ class Getter:
                         else:
                             args = []
 
-                        self.parts.append({
+                        parts.append({
                             "special": special,
                             "args": args
                         })
@@ -134,11 +137,12 @@ class Getter:
                         if self.convert_ints:
                             try:
                                 p = int(part[0])
-                                self.parts.append(p)
+                                parts.append(p)
                             except ValueError:
-                                self.parts.append(part[0])
+                                parts.append(part[0])
                         else:
-                            self.parts.append(part[0])
+                            parts.append(part[0])
+        return parts
 
     @classmethod
     def full_regex(cls):
@@ -157,31 +161,38 @@ class Getter:
         else:
             raise NameError(f"{name} is already registered as a special value")
 
-    def get(self, item: Union[list, dict]) -> Any:
+    def single(self, item: Union[list, dict]) -> Union[Any, List[Any]]:
         """
         Get the field from the specified item
         """
-        value = item
+        values = []
         if not self.parts:
             return self.fallback
         else:
-            for part in self.parts:
-                if isinstance(part, dict):
-                    value = self._specials[part["special"]](value, *part["args"])
-                else:
-                    if isinstance(value, list):
-                        if part < len(value):
-                            value = value[part]
-                        else:
-                            logger.warning(f"Could not find field '{part}'")
-                            return self.fallback
+            for field in self.parts:
+                value = item
+                for part in field:
+                    if isinstance(part, dict):
+                        value = self._specials[part["special"]](value, *part["args"])
                     else:
-                        if part in value:
-                            value = value[part]
+                        if isinstance(value, list):
+                            if part < len(value):
+                                value = value[part]
+                            else:
+                                logger.warning(f"Could not find field '{part}'")
+                                values.append(self.fallback)
                         else:
-                            logger.warning(f"Could not find field '{part}'")
-                            return self.fallback
-            return value
+                            if part in value:
+                                value = value[part]
+                            else:
+                                logger.warning(f"Could not find field '{part}'")
+                                values.append(self.fallback)
+                values.append(value)
+
+        return values if self.multiple else values[0]
+
+    def many(self, items: List[Union[list, dict]]) -> Union[List[Any], List[List[Any]]]:
+        return [self.single(item) for item in items]
 
 
 if __name__ == "__main__":

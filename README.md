@@ -3,6 +3,15 @@
 >focusing on providing an easy way to filter, 
 >format, and extract fields from JSON-like data.
 
+## Changelog
+ * `1.0.3`
+   * Rename `Getter.get` to `Getter.single`
+   * Add `Getter.many`
+   * Support getting multiple fields at once by changing `Getter` to allow
+   `Getter(<field>)` and `Getter([<field>, <field>, ...])`
+   * Change `Filter`'s before for when there are no filters. Now, by default,
+   all items will be returned unless `Filter(..., empty_filters_response=False)`
+
 ## Glossary
  * [`Installation`](#install)
  * [`Getter`](#getter)
@@ -20,13 +29,18 @@ from jtools import Getter, Filter, Key, Condition, Formatter
 ```
 
 ## <a name="getter">Getter</a>
->`Getter` one the surface is very simple: you give it a field query string
->and it returns the value at that path from a given an item. Example:
->`Getter("name").get({"name": "John"})` will return `"John"`.
+>`Getter` one the surface is very simple: you give it a field query string (or several)
+>and it returns the value (or values) at that path(s) from a given an item or list of items. 
+>Example: `Getter("name").single({"name": "John"})` will return `"John"`.
 >However, there are many more cool features, like supporting dot-notation,
 >having the ability to transform values with specials, and even the ability 
 >to drill down into lists. Below is a fuller list of the features.
 
+ * `.single(item)` can be used to get field(s) from a single item, or 
+ `.many(items)` can be used to get field(s) from a list of items
+ * Multiple fields can be gotten at once by passing a list of query strings.
+ `Getter(["name", "age"])`. Resulting values from `.single` and `.many` will be
+ lists of corresponding length
  * Dot-notation is supported and can be used to access nested values. For
  example, `meta.id` can be used to get the `id` field from the item
  `{"meta": {"id": 1}}`, resulting in the value of `1`. 
