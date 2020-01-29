@@ -81,9 +81,25 @@ Type Conversions
   * `$not -> bool`: Returns `!value`
   * `$fallback(fallback) -> value or fallback`: If the value is None, then it will be replaced with `fallback`.
   * `$ternary(if_true, if_false, strict=False) -> Any`: Return `if_true` if the value is `truish`, otherwise,
-  return `if_false`. Pass `True` for `strict` if the value must be `True` and not just `truish`. 
-  * `$timestamp(fmt="%Y-%m-%dT%H:%M:%SZ") -> str`: Take a Unix
-  timestamp in seconds and return the value in the specified time format.
+  return `if_false`. Pass `True` for `strict` if the value must be `True` and not just `truish`.
+  
+Datetime 
+  * `$parse_timestamp -> datetime`: Take a Unix timestamp in seconds and return a corresponding datetime object
+  * `$datetime(attr) -> int`: Get a specific attribute of a datetime object. For example. `'dt.$parse_timestamp.$datetime("year")'`
+  The options are
+    * year
+    * month
+    * day
+    * hour
+    * minute
+    * second
+    * microsecond
+  * `$strptime(fmt=None) -> datetime`: Parse a datetime string and return a corresponding datetime object.
+  If `fmt=None`, then common formats will be tried. Refer to 
+  https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior for formatting instructions
+  * `$timestamp -> float`: Dump a datetime object to a UTC timestamp as a float
+  * `$strftime(fmt="%Y-%m-%dT%H:%M:%SZ":) -> str`: Format a datetime object as a string using `fmt`.
+  Refer to https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior for formatting instructions
   
 Math / Numbers
   * `$add(num) -> Union[int, float]`

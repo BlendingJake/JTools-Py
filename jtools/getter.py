@@ -1,10 +1,11 @@
 from typing import Union, Any, Dict, Callable, List
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import math
 import json
 from os import environ
+from dateutil.parser import parse
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -13,13 +14,20 @@ logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
 __all__ = ["Getter"]
 
 
+def parse_dt_string(value, fmt=None):
+    if fmt is None:
+        return parse(value)
+    else:
+        return datetime.strptime(value, fmt)
+
+
 class Getter:
     """
     FieldGetter provides a powerful way to access that attributes of JSON-like data and perform
     manipulations on them. The `field` notation is listed below by the constructor.
     """
     _arguments = r"""((?:(?!{{)(?:(?:"(?!{{)[^"]*")|[^\)]))*)"""
-    _func_def = r"(?:\$[a-z]+(?:\(" + _arguments + r"\))?)"
+    _func_def = r"(?:\$[a-z]+[_]*[a-z]+(?:\(" + _arguments + r"\))?)"
     _field = r"[-_a-zA-Z0-9]+"
     _part = r"(?:\.(" + _func_def + "|" + _field + "))"
 
@@ -47,8 +55,15 @@ class Getter:
         "int": lambda value: int(value),
         "not": lambda value: not value,
         "fallback": lambda value, fallback: value if value else fallback,
-        "ternary": lambda value, if_true, if_false, strict=False: if_true if value or value is True else if_false,
-        "timestamp": lambda value, fmt="%Y-%m-%dT%H:%M:%SZ": datetime.utcfromtimestamp(value).strftime(fmt),
+        "ternary": lambda value, if_true, if_false, strict=False: if_true if (not strict and value) or (
+                strict and value is True) else if_false,
+
+        # datetime
+        "parse_timestamp": lambda value: datetime.utcfromtimestamp(value),
+        "datetime": lambda value, attr: getattr(value, attr),
+        "strptime": lambda value, fmt=None: parse_dt_string(value, fmt),
+        "timestamp": lambda value: value.replace(tzinfo=timezone.utc).timestamp(),
+        "strftime": lambda value, fmt="%Y-%m-%dT%H:%M:%SZ": value.strftime(fmt),
 
         # math / numeric
         "add": lambda value, num: value + num,
@@ -73,7 +88,7 @@ class Getter:
 
         # list
         "sum": lambda value: sum(value),
-        "join": lambda value, sep=", ": sep.join(value),
+        "join": lambda value, sep=", ": sep.join(str(i) for i in value),
         "index": lambda value, index: value[index],
         "range": lambda value, start, end=None: value[start: end if end is not None else len(value)],
     }
@@ -83,9 +98,10 @@ class Getter:
     def __init__(self, field: Union[str, List[str]], convert_ints=True, fallback=None):
         """
         Create a FieldGetter for a specific field query string.
-        :param field: The field query string (or strings), formatted <field>[.<field>|.$<special>[(<arg>[, <arg>]*)]],
+        :param field: The field query string (or strings),
+                formatted <field>[.<field>|.$<special>[(<arg>[, <arg>]*)]],
             where:
-                field: Field name from any items specified later with `.get(item)`.
+                field: An exact field name or index value to get from the items provided later with `.single` or `.many`
                 special: Any name in the `_specials` map above
                 arg: Any JSON-formatted value. Note: JSON requires strings to be double-quoted
 
@@ -125,6 +141,7 @@ class Getter:
                             special = part[0][1:]
 
                         if part[1]:
+                            logger.debug(f"going to load: [{part[1]}]")
                             args = json.loads(f"[{part[1]}]")
                         else:
                             args = []
@@ -172,21 +189,22 @@ class Getter:
             for field in self.parts:
                 value = item
                 for part in field:
-                    if isinstance(part, dict):
-                        value = self._specials[part["special"]](value, *part["args"])
-                    else:
-                        if isinstance(value, list):
-                            if part < len(value):
-                                value = value[part]
-                            else:
-                                logger.warning(f"Could not find field '{part}'")
-                                values.append(self.fallback)
+                    if value != self.fallback:
+                        if isinstance(part, dict):
+                            value = self._specials[part["special"]](value, *part["args"])
                         else:
-                            if part in value:
-                                value = value[part]
+                            if isinstance(value, list):
+                                if part < len(value):
+                                    value = value[part]
+                                else:
+                                    logger.warning(f"Could not find field '{part}'")
+                                    value = self.fallback
                             else:
-                                logger.warning(f"Could not find field '{part}'")
-                                values.append(self.fallback)
+                                if part in value:
+                                    value = value[part]
+                                else:
+                                    logger.warning(f"Could not find field '{part}'")
+                                    value = self.fallback
                 values.append(value)
 
         return values if self.multiple else values[0]
