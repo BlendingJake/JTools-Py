@@ -206,6 +206,10 @@ Filter Schema:
     OR
 
     {"or": <nested outer structure>},
+    
+    OR
+
+    {"not": <nested outer structure>},
 
     ...
 ]
@@ -235,6 +239,8 @@ Operators:
  * `!in`
  * `contains`: `<value> in <field>`
  * `!contains`
+ * `interval`: `<field> in interval [value[0], value[1]]` (closed/inclusive interval)
+ * `!interval`: `<field> not in interval [value[0], value[1]]` 
  * `startswith`
  * `endswith`
  * `null`
@@ -261,6 +267,8 @@ Operators:
 | `!in` | `nin` | N/A | 
 | `contains` | `contains` | N/A | 
 | `!contains` | `not_contains` | N/A | 
+| `interval` | `interval` | N/A |
+| `!interval` | `not_interval` | N/A |
 | `startswith` | `startswith` | N/A | 
 | `endswith` | `endswith` | N/A | 
 | `null` | `none` | N/A | 
@@ -268,11 +276,23 @@ Operators:
 
 #### <a name="condition">Condition</a>
 >Intended to be used in combination with `Key` to make creating filters
->easier than manually creating the `JSON`. There are two conditions supported:
->`and` and `or`. They can be manually accessed via `and_()`, `or_()`, 
->or the overloaded operators `&` and `|` can be used, respectively.
+>easier than manually creating the `JSON`. There are three conditions supported:
+>`and`, `or`, and `not`. They can be manually accessed via `and_(*args)`, `or_*args)`, and `not_()`, 
+>or the overloaded operators `&`, `|`, and `~` can be used, respectively.
 
-**Caution: `&` and `|` bind tighter than the comparisons operators**
+**Caution: `&` and `|` bind tighter than the comparisons operators and `~` binds the tightest**
 `Key("first_name") == "John" | Key("first_name") == "Bill"` is actually
 `(Key("first_name") == ("John" | Key("first_name"))) == "Bill"`, not
 `(Key("first_name") == "John") | (Key("first_name") == "Bill")`
+
+> Examples
+```python
+Key("state").eq("Texas") | Key("city").eq("New York")
+(Key("gender") == "male") & (Key("age") >= 18) & (Key("selective_service") == False)
+
+Key('creation_time.$parse_timestamp.$datetime("year")').lt(2005).or_(
+    Key('creation_time.$parse_timestamp.$datetime("year")').gt(2015)
+).and_(
+    Key("product_id") == 15
+)
+```

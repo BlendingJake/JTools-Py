@@ -24,25 +24,40 @@ class Condition:
         self.output.extend(other.output)
         return self
 
-    def and_(self, other):
-        return self & other
+    def and_(self, *args):
+        val = self
+        for a in args:
+            val = val & a
+
+        return val
 
     def __or__(self, other):
-        temp = []
+        t = []
         for l in (self, other):
             if len(l.output) == 1:
                 if "or" in l.output[0]:
-                    temp.extend(l.output[0]["or"])
+                    t.extend(l.output[0]["or"])
                 else:
-                    temp.append(l.output[0])
+                    t.append(l.output[0])
             else:
-                temp.append(l.output)
+                t.append(l.output)
 
-        self.output = [{"or": temp}]
+        self.output = [{"or": t}]
         return self
 
-    def or_(self, other):
-        return self | other
+    def or_(self, *args):
+        val = self
+        for a in args:
+            val = val | a
+
+        return val
+
+    def __invert__(self):
+        self.output = [{"not": self.output}]
+        return self
+
+    def not_(self):
+        return ~self
 
     def filters(self) -> List[dict]:
         return self.output
@@ -100,6 +115,12 @@ class Key:
     def not_contains(self, other):
         return Condition(self.field, "!contains", other)
 
+    def interval(self, other):
+        return Condition(self.field, "interval", other)
+
+    def not_interval(self, other):
+        return Condition(self.field, "!interval", other)
+
     def startswith(self, other):
         return Condition(self.field, "startswith", other)
 
@@ -126,6 +147,9 @@ class Filter:
         "!in": lambda field, value: field not in value,
         "contains": lambda field, value: value in field,
         "!contains": lambda field, value: value not in field,
+
+        "interval": lambda field, value: value[0] <= field <= value[1],
+        "!interval": lambda field, value: field < value[0] or value[1] < field,
 
         "startswith": lambda field, value: field.startswith(value),
         "endswith": lambda field, value: field.endswith(value),
@@ -159,6 +183,8 @@ class Filter:
                 out.update(self._preprocess(f, convert_ints))
             elif "or" in f:
                 out.update(self._preprocess(f["or"], convert_ints))
+            elif "not" in f:
+                out.update(self._preprocess(f["not"], convert_ints))
             elif f["field"] not in out:
                 out[f["field"]] = Getter(f["field"], convert_ints=convert_ints)
 
@@ -174,6 +200,8 @@ class Filter:
                 c = self._filter(item, f)
             elif "or" in f:
                 c = self._filter(item, f["or"], True)
+            elif "not" in f:
+                c = not self._filter(item, f["not"])
             else:
                 c = self._filters[f["operator"]](self.getters[f["field"]].single(item), f["value"])
 

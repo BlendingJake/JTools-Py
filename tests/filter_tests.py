@@ -13,6 +13,8 @@ with open("./data/20.json", "r") as file:
     small_data = json.loads(file.read())
 
 
+# TODO: test multiple ands and ors together
+# TODO: test interval and !interval
 class TestFilter(unittest.TestCase):
     def test_nested(self):
         items = Filter(Key("friends.0.name") == "Webster Green").filter(small_data)
@@ -45,6 +47,16 @@ class TestFilter(unittest.TestCase):
             )).filter(small_data)
         self.assertEqual(1, len(items))
         self.assertEqual("5e2797c05aa0585816ce8b8c", items[0]["_id"])
+
+    def test_basic_not(self):
+        items = Filter(~Key("company").eq("XYLAR")).filter(small_data)
+        self.assertEqual(len(small_data) - 1, len(items))
+
+    def test_not_or(self):
+        items = Filter(
+            ~(Key("address").contains("Texas").or_(Key("address").contains("West Virginia")))
+        ).filter(small_data)
+        self.assertEqual(len(small_data) - 2, len(items))
 
     def test_multiple_specials_datetime(self):
         items = Filter(Key('registered.$strptime.$strftime("%Y").$int') >= 2017).filter(small_data)
