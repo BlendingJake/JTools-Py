@@ -13,17 +13,17 @@ with open("./data/10000.json", "r") as file:
 if __name__ == "__main__":
     timer = Timer()
 
-    timer.time_it(Filter(Key("age") > 40).filter, lambda: large_data[:randint(0, len(large_data))],
+    timer.time_it(Filter(Key("age") > 40).many, lambda: large_data[:randint(0, len(large_data))],
                   call_callable_args=True, runs=10, iterations_per_run=1, log_arguments=True,
                   split_label="Filter ('age')")
 
-    timer.time_it(Filter(Key("friends.$length") > 3).filter, lambda: large_data[:randint(0, len(large_data))],
+    timer.time_it(Filter(Key("friends.$length") > 3).many, lambda: large_data[:randint(0, len(large_data))],
                   call_callable_args=True, runs=10, iterations_per_run=1, log_arguments=True,
                   split_label="Filter ('friends.$length')")
 
     timer.time_it(Filter(
         Key("latitude").gte(-45) & Key("latitude").lte(45) & Key("longitude").lte(0)
-    ).filter, lambda: large_data[:randint(0, len(large_data))],
+    ).many, lambda: large_data[:randint(0, len(large_data))],
                   call_callable_args=True, runs=10, iterations_per_run=1, log_arguments=True,
                   split_label="Filter (lat/lon)")
 

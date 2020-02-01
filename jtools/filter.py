@@ -220,7 +220,7 @@ class Filter:
 
         return self.empty_filters_response if overall is None else overall
 
-    def filter(self, items: List[Union[dict, list]]) -> List[Union[dict, list]]:
+    def many(self, items: List[Union[dict, list]]) -> List[Union[dict, list]]:
         """
         Take a list of items and only return the ones that meet the filter conditions
         """
@@ -228,7 +228,7 @@ class Filter:
             item for item in items if self._filter(item)
         ]
 
-    def filter_single(self, item: Union[dict, list]) -> bool:
+    def single(self, item: Union[dict, list]) -> bool:
         return self._filter(item)
 
 

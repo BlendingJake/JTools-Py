@@ -194,7 +194,8 @@ Formatter(
 ## <a name="filter">Filter</a>
 >`Filter` takes the field querying capabilities of `Getter` and combines them with 
 >filtering conditions to allow lists of items to be filtered down to just those of 
->interest. The basic usage is: `Filter(<filters>).filter(<list of items>)`.
+>interest. The basic usage is: `Filter(<filters>).many(<list of items>)`, although
+>`.single` can also be used to get a boolean answer of whether the item matches the filter or not.
 >The filters can be manually built, or the `Key` and `Condition` classes can 
 >be used to simplify your code.
 

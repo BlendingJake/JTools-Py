@@ -15,8 +15,8 @@ if __name__ == "__main__":
     test = [{"value": i} for i in range(10)]
     print(test)
 
-    print(Filter(Key("value") < 5).filter(test))
-    print(Filter(~Key("value").lt(5)).filter(test))
+    print(Filter(Key("value") < 5).many(test))
+    print(Filter(~Key("value").lt(5)).many(test))
 
-    print(Filter(Key("value").lt(3) | Key("value").gt(7)).filter(test))
-    print(Filter(~(Key("value").lt(3) | Key("value").gt(7))).filter(test))
+    print(Filter(Key("value").lt(3) | Key("value").gt(7)).many(test))
+    print(Filter(~(Key("value").lt(3) | Key("value").gt(7))).many(test))
