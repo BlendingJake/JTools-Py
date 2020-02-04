@@ -4,6 +4,17 @@
 >format, and extract fields from JSON-like data.
 
 ## Changelog
+ * `1.0.4`
+   * Added new specials, mostly relating to time
+     * `$parse_timestamp`
+     * `$datetime`
+     * `$strptime`
+     * `$strftime`
+   * Added `not` filtering and the `interval` and `!interval` operators
+   * Made `Filter` consistent with `Getter` by removing `.filter()` and adding
+   `.single()` and `.many()`
+   * Added `fallback` to `Getter`
+   * added numerous unit tests
  * `1.0.3`
    * Rename `Getter.get` to `Getter.single`
    * Add `Getter.many`

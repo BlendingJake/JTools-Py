@@ -20,8 +20,8 @@ with open("README.md", "r") as file:
     long_description = file.read()
 
 setuptools.setup(
-    name="jtools-blending-jake",
-    version="1.0.4a",
+    name="jtools",
+    version="1.0.4",
     author="Jacob Morris",
     author_email="blendingjake@gmail.com",
     description="A Python module that aids filtering, formatting, and transforming JSON-like objects",
