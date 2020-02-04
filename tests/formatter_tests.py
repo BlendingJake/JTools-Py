@@ -14,6 +14,39 @@ with open("./data/20.json", "r") as file:
 
 
 class TestFormatter(unittest.TestCase):
+    def test_nested_capital_prefix(self):
+        data = {"env": {"VERSION": "1.0.0"}}
+        prefix = "build/"
+        self.assertEqual(
+            prefix + data["env"]["VERSION"],
+            Formatter(prefix+"{{env.VERSION}}").format(data)
+        )
+
+    def test_nested_capital(self):
+        data = {"env": {"VERSION": "1.0.0"}}
+        self.assertEqual(
+            data["env"]["VERSION"],
+            Formatter("{{env.VERSION}}").format(data)
+        )
+
+    def test_format_missing(self):
+        self.assertEqual(
+            None,
+            Formatter("{{missing}}").format({})
+        )
+
+    def test_format_missing_nested(self):
+        self.assertEqual(
+            "N/A",
+            Formatter("{{found.missing}}", "N/A").format({"found": {}})
+        )
+
+    def test_format_missing_nested_field(self):
+        self.assertEqual(
+            None,
+            Formatter("{{a.$index({{index}})}}").format({"a": [1, 2]})
+        )
+
     def test_nested_number(self):
         self.assertEqual(
             "Balance: $750",

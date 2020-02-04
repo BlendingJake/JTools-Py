@@ -154,6 +154,9 @@ current domain, which we can do with `email.$split("@").1.$split(".").0`, and th
 we want to pass that as an argument into `$replace`. To do so, we need to surround the nested
 field with double-quotes so it will be properly recognized as an argument in the `replace` special.
 `Formatter('Generic Email: {{  email.$replace("{{  email.$split("@").1.$split(".").0  }}", "<domain>")  }}').format(item)"`
+* **IMPORTANT:** Pay attention when using `f-strings` and `Formatter` as `f"{{field}}"` becomes `"{field}"`. If you
+have to use an `f-string`, then you'll need to escape the braces with another brace, so `f"{{{{field}}}}"` becomes
+`"{{field}}"`.
  
 Example (flattening operations):
 ```python

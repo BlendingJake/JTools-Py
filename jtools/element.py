@@ -1,10 +1,10 @@
-from .jbase import JBase
+from .base import Base
 from typing import Union
 
-__all__ = ["JElement"]
+__all__ = ["Element"]
 
 
-class JElement(JBase):
+class Element(JBase):
     def __init__(self, data: Union[list, dict], meta=None):
         super().__init__(meta)
         self.data = data

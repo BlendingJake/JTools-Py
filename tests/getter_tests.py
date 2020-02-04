@@ -21,6 +21,13 @@ class TestGetter(unittest.TestCase):
             Getter("guid").single(small_data[0])
         )
 
+    def test_capital_single(self):
+        data = {"outer": {"INNER": "test"}}
+        self.assertEqual(
+            data["outer"]["INNER"],
+            Getter("outer.INNER").single(data)
+        )
+
     def test_fallback_single_field_single(self):
         self.assertEqual(
             "MISSING",
@@ -33,7 +40,7 @@ class TestGetter(unittest.TestCase):
             Getter("null", fallback="MISSING").many(small_data[:3])
         )
 
-    def test_fallback_mutiple_fields_single(self):
+    def test_fallback_multiple_fields_single(self):
         self.assertEqual(
             ["MISSING", "MISSING"],
             Getter(["null", "missing"], fallback="MISSING").single(small_data[0])

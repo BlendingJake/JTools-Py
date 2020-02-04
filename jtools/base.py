@@ -3,7 +3,7 @@ from .getter import Getter
 from .setter import Setter
 from uuid import uuid4
 
-__all__ = ["JBase"]
+__all__ = ["Base"]
 MISSING = object()
 
 
@@ -20,7 +20,7 @@ class Hook:
         self.callback(instance)
 
 
-class JBase:
+class Base:
     def __init__(self, meta: dict = None):
         if meta is None:
             self.meta = {}

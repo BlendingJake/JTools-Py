@@ -197,13 +197,13 @@ class Getter:
                                 if part < len(value):
                                     value = value[part]
                                 else:
-                                    logger.warning(f"Could not find field '{part}'")
+                                    logger.info(f"Could not find field '{part}'")
                                     value = self.fallback
                             else:
                                 if part in value:
                                     value = value[part]
                                 else:
-                                    logger.warning(f"Could not find field '{part}'")
+                                    logger.info(f"Could not find field '{part}'")
                                     value = self.fallback
                 values.append(value)
 
