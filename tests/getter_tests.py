@@ -94,6 +94,18 @@ class TestGetter(unittest.TestCase):
             Getter(["eyeColor", "gender"]).many(small_data[1:3])
         )
 
+    def test_starting_with_special_keys(self):
+        self.assertEqual(
+            len(small_data[0]),
+            Getter("$keys.$length").single(small_data[0])
+        )
+
+    def test_stating_with_special_then_field(self):
+        self.assertEqual(
+            small_data[0]["_id"],
+            Getter("$values.0").single(small_data[0])
+        )
+
     def test_list_map(self):
         self.assertEqual(
             small_data[0]["friends"][0]["name"],

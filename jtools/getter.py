@@ -27,12 +27,12 @@ class Getter:
     manipulations on them. The `field` notation is listed below by the constructor.
     """
     _arguments = r"""((?:(?!{{)(?:(?:"(?!{{)[^"]*")|[^\)]))*)"""
-    _func_def = r"(?:\$[a-z]+[_]*[a-z]+(?:\(" + _arguments + r"\))?)"
+    _func_def = r"(?:\$[a-z_]+(?:\(" + _arguments + r"\))?)"
     _field = r"[-_a-zA-Z0-9]+"
     _part = r"(?:\.(" + _func_def + "|" + _field + "))"
 
     _part_pattern = re.compile(_part)
-    _full_field = "(" + _field + ")(" + _part + "*)"
+    _full_field = "(" + _func_def + "|" + _field + ")(" + _part + "*)"
     _full_pattern = re.compile(_full_field)
 
     logger.debug(f"Function Def: {_func_def}")
@@ -120,6 +120,7 @@ class Getter:
         self.convert_ints = convert_ints
 
         self.parts: List[list] = [self._process_field(f) for f in self.fields]
+        logger.debug(f"got parts: {self.parts}")
 
     def __repr__(self):
         return f"Getter: {self.parts}"
@@ -130,26 +131,15 @@ class Getter:
         match = self._full_pattern.match(field)
         if match is not None:
             full_groups = match.groups()
-            parts.append(full_groups[0])  # anchor
+            if full_groups[0][0] == "$":
+                parts.append(self._parse_special(full_groups[0], full_groups[1]))
+            else:
+                parts.append(full_groups[0])
 
-            if full_groups[1]:
-                for part in self._part_pattern.findall(full_groups[1]):
+            if full_groups[2]:
+                for part in self._part_pattern.findall(full_groups[2]):
                     if part[0][0] == "$":  # is a special
-                        if "(" in part[0]:
-                            special = part[0][1:part[0].index("(")]
-                        else:  # no args
-                            special = part[0][1:]
-
-                        if part[1]:
-                            logger.debug(f"going to load: [{part[1]}]")
-                            args = json.loads(f"[{part[1]}]")
-                        else:
-                            args = []
-
-                        parts.append({
-                            "special": special,
-                            "args": args
-                        })
+                        parts.append(self._parse_special(part[0], part[1]))
                     else:  # regular field
                         if self.convert_ints:
                             try:
@@ -160,6 +150,24 @@ class Getter:
                         else:
                             parts.append(part[0])
         return parts
+
+    @classmethod
+    def _parse_special(cls, text: str, args_text: str) -> dict:
+        if "(" in text:
+            special = text[1:text.index("(")]
+        else:  # no args
+            special = text[1:]
+
+        if args_text:
+            logger.debug(f"going to load: [{args_text}]")
+            args = json.loads(f"[{args_text}]")
+        else:
+            args = []
+
+        return {
+            "special": special,
+            "args": args
+        }
 
     @classmethod
     def full_regex(cls):
@@ -197,13 +205,13 @@ class Getter:
                                 if part < len(value):
                                     value = value[part]
                                 else:
-                                    logger.info(f"Could not find field '{part}'")
+                                    logger.debug(f"Could not find field '{part}'")
                                     value = self.fallback
                             else:
                                 if part in value:
                                     value = value[part]
                                 else:
-                                    logger.info(f"Could not find field '{part}'")
+                                    logger.debug(f"Could not find field '{part}'")
                                     value = self.fallback
                 values.append(value)
 
@@ -214,4 +222,4 @@ class Getter:
 
 
 if __name__ == "__main__":
-    print(Getter("a"))
+    print(Getter("found.missing", fallback="N/A").single({"found": {}}))

@@ -43,8 +43,8 @@ class Formatter:
     def _replacer(self, match, item: Union[list, dict]) -> str:
         groups = match.groups()
         field = groups[0]
-        if groups[1]:
-            field += groups[1]
+        if groups[2]:
+            field += groups[2]
 
         result = Getter(field, fallback=self.MISSING).single(item)
         logger.debug(f"field: {field}, got: {result}")
