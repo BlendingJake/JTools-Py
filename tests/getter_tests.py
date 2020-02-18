@@ -290,6 +290,15 @@ class TestGetter(unittest.TestCase):
             Getter('friends.$map("values").$map("join", ": ").$join("\\n")').single(small_data[0])
         )
 
+    def test_register_special(self):
+        Getter.register_special("cube", lambda value: value ** 3)
+        self.assertEqual(8, Getter("a.$cube").single({"a": 2}))
+
+    def test_complex_argument(self):
+        self.assertEqual(
+            5, Getter("a.$distance([0, 0])").single({"a": [3, 4]})
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,10 @@
 >format, and extract fields from JSON-like data.
 
 ## Changelog
+ * `1.0.5`
+   * Query strings can now start with specials to allow operations on the entire
+   object being passed.
+   * Bug fixes and more unit tests
  * `1.0.4`
    * Added new specials, mostly relating to time
      * `$parse_timestamp`

@@ -66,6 +66,11 @@ class TestFormatter(unittest.TestCase):
             Formatter('Tags: [{{tags.$join("], [")}}]').format(small_data[0])
         )
 
+    def test_complex_field_as_argument(self):
+        self.assertEqual(
+            "5.0", Formatter("{{a.$distance({{b}})}}").format({"a": [1, 1], "b": [4, 5]})
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -174,7 +174,7 @@ class Getter:
         return cls._full_field
 
     @classmethod
-    def register_special(cls, name: str, func: Callable):
+    def register_special(cls, name: str, func: Callable) -> bool:
         """
         Register a new special that can be accessed with $<name>.
         The function should take at least one argument, <value>.
@@ -183,8 +183,10 @@ class Getter:
         """
         if name not in cls._specials:
             cls._specials[name] = func
+            return True
         else:
-            raise NameError(f"{name} is already registered as a special value")
+            logger.warning(f"{name} is already registered as a special value")
+            return False
 
     def single(self, item: Union[list, dict]) -> Union[Any, List[Any]]:
         """
