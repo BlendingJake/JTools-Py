@@ -2,15 +2,17 @@ import unittest
 import sys
 import json
 import datetime
+from pathlib import Path
 
 sys.path.append("../")
 
 from jtools import Getter
 
-with open("./data/10000.json", "r") as file:
+folder = Path(__file__).parent
+with open(folder / "data/10000.json", "r") as file:
     large_data = json.loads(file.read())
 
-with open("./data/20.json", "r") as file:
+with open(folder / "data/20.json", "r") as file:
     small_data = json.loads(file.read())
 
 
@@ -68,6 +70,12 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(
             "MISSING",
             Getter("null.null", fallback="MISSING").single(small_data[0])
+        )
+
+    def test_fallback_single_field_single_nested_single_number(self):
+        self.assertEqual(
+            "MISSING",
+            Getter("null.3", fallback="MISSING").single({"null": [0, 1]})
         )
 
     def test_fallback_single_field_single_nested_many(self):
@@ -217,6 +225,12 @@ class TestGetter(unittest.TestCase):
             Getter("dt.$strptime").single({"dt": "4/3/1978 5:25 PM"})
         )
 
+    def test_special_strptime_custom(self):
+        self.assertEqual(
+            datetime.datetime(year=2020, month=8, day=6),
+            Getter('dt.$strptime("%d%Y%m")').single({"dt": "06202008"})
+        )
+
     def test_special_timestamp(self):
         self.assertEqual(
             260472300.0,
@@ -291,13 +305,22 @@ class TestGetter(unittest.TestCase):
         )
 
     def test_register_special(self):
-        Getter.register_special("cube", lambda value: value ** 3)
+        self.assertTrue(Getter.register_special("cube", lambda value: value ** 3))
         self.assertEqual(8, Getter("a.$cube").single({"a": 2}))
+        self.assertFalse(Getter.register_special("cube", lambda value: value ** 3))
 
     def test_complex_argument(self):
         self.assertEqual(
             5, Getter("a.$distance([0, 0])").single({"a": [3, 4]})
         )
+
+    def test_get_nothing(self):
+        self.assertIsNone(Getter("").single(small_data[0]))
+
+    def test_no_convert_ints(self):
+        self.assertEqual(5, Getter("data.2").single({"data": [0, 1, 5]}))
+        self.assertIsNone(Getter("data.2", convert_ints=False).single({"data": [0, 1, 5]}))
+        self.assertEqual(5, Getter("data.2", convert_ints=False).single({"data": {"2": 5}}))
 
 
 if __name__ == "__main__":

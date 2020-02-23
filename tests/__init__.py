@@ -1,12 +1,14 @@
 import unittest
-import filter_tests
-import getter_tests
-import formatter_tests
+from . import filter_tests
+from . import getter_tests
+from . import formatter_tests
+from . import performance_tests
 
 
-if __name__ == "__main__":
+def run_tests():
     suite = unittest.TestLoader().loadTestsFromModule(filter_tests)
     suite.addTests(unittest.TestLoader().loadTestsFromModule(getter_tests))
     suite.addTests(unittest.TestLoader().loadTestsFromModule(formatter_tests))
+    suite.addTests(unittest.TestLoader().loadTestsFromModule(performance_tests))
 
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    return suite

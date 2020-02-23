@@ -60,7 +60,6 @@ class Getter:
 
         # datetime
         "parse_timestamp": lambda value: datetime.utcfromtimestamp(value),
-        "datetime": lambda value, attr: getattr(value, attr),
         "strptime": lambda value, fmt=None: parse_dt_string(value, fmt),
         "timestamp": lambda value: value.replace(tzinfo=timezone.utc).timestamp(),
         "strftime": lambda value, fmt="%Y-%m-%dT%H:%M:%SZ": value.strftime(fmt),
@@ -91,18 +90,22 @@ class Getter:
         "join": lambda value, sep=", ": sep.join(str(i) for i in value),
         "index": lambda value, index: value[index],
         "range": lambda value, start, end=None: value[start: end if end is not None else len(value)],
+
+        # attribute accessing
+        "call": lambda value, func, *args: getattr(value, func)(*args),
+        "attr": lambda value, attr: getattr(value, attr)
     }
 
     _specials["map"] = lambda value, special, *args: [Getter._specials[special](v, *args) for v in value]
 
-    def __init__(self, field: Union[str, List[str]], convert_ints=True, fallback=None):
+    def __init__(self, field: Union[str, List[str]], convert_ints: bool = True, fallback: any = None):
         """
         Create a FieldGetter for a specific field query string.
         :param field: The field query string (or strings),
-                formatted <field>[.<field>|.$<special>[(<arg>[, <arg>]*)]],
+                formatted [<field>|<special>][.<field>|.<special>]*
             where:
                 field: An exact field name or index value to get from the items provided later with `.single` or `.many`
-                special: Any name in the `_specials` map above
+                special: $<name>[([arg[, arg]*])] Any name in the `_specials` map above
                 arg: Any JSON-formatted value. Note: JSON requires strings to be double-quoted
 
             Examples:
@@ -114,7 +117,7 @@ class Getter:
             whether to leave them as strings.
         :param fallback: A fallback value that will be used a field cannot be found on a given object
         """
-        self.multiple = isinstance(field, (list, tuple))
+        self.multiple: bool = isinstance(field, (list, tuple))
         self.fields: List[str] = field if self.multiple else [field]
         self.fallback = fallback
         self.convert_ints = convert_ints
@@ -193,18 +196,18 @@ class Getter:
         Get the field from the specified item
         """
         values = []
-        if not self.parts:
-            return self.fallback
-        else:
-            for field in self.parts:
-                value = item
+        for field in self.parts:
+            value = item
+            if not field:
+                value = self.fallback
+            else:
                 for part in field:
                     if value != self.fallback:
                         if isinstance(part, dict):
                             value = self._specials[part["special"]](value, *part["args"])
                         else:
                             if isinstance(value, list):
-                                if part < len(value):
+                                if isinstance(part, int) and part < len(value):
                                     value = value[part]
                                 else:
                                     logger.debug(f"Could not find field '{part}'")
@@ -215,7 +218,7 @@ class Getter:
                                 else:
                                     logger.debug(f"Could not find field '{part}'")
                                     value = self.fallback
-                values.append(value)
+            values.append(value)
 
         return values if self.multiple else values[0]
 

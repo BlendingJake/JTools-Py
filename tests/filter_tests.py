@@ -1,15 +1,17 @@
 import unittest
 import sys
 import json
+from pathlib import Path
 
 sys.path.append("../")
 
 from jtools import Filter, Key
 
-with open("./data/10000.json", "r") as file:
+folder = Path(__file__).parent
+with open(folder / "data/10000.json", "r") as file:
     large_data = json.loads(file.read())
 
-with open("./data/20.json", "r") as file:
+with open(folder / "data/20.json", "r") as file:
     small_data = json.loads(file.read())
 
 
@@ -43,12 +45,23 @@ class TestFilter(unittest.TestCase):
             Key("address").contains("Texas").or_(Key("address").contains("West Virginia")).and_(
                 Key("company") == "XYLAR"
             )).many(small_data)
+        items2 = Filter([
+            {"or": [
+                {"field": "address", "operator": "contains", "value": "Texas"},
+                {"field": "address", "operator": "contains", "value": "West Virginia"}
+            ]},
+            [{"field": "company", "operator": "==", "value": "XYLAR"}]
+        ]).many(small_data)
         self.assertEqual(1, len(items))
+        self.assertEqual(len(items), len(items2))
         self.assertEqual("5e2797c05aa0585816ce8b8c", items[0]["_id"])
+        self.assertEqual("5e2797c05aa0585816ce8b8c", items2[0]["_id"])
 
     def test_basic_not(self):
         items = Filter(~Key("company").eq("XYLAR")).many(small_data)
+        items2 = Filter(Key("company").eq("XYLAR").not_()).many(small_data)
         self.assertEqual(len(small_data) - 1, len(items))
+        self.assertEqual(len(items), len(items2))
 
     def test_not_or(self):
         items = Filter(
@@ -58,32 +71,132 @@ class TestFilter(unittest.TestCase):
 
     def test_multiple_specials_datetime(self):
         items = Filter(Key('registered.$strptime.$strftime("%Y").$int') >= 2017).many(small_data)
-        items2 = Filter(Key('registered.$split("-").0.$int') > 2017).many(small_data)
-        items3 = Filter(Key('registered.$strptime.$datetime("year")') >= 2016).many(small_data)
+        items2 = Filter(Key('registered.$split("-").0.$int').gt(2017)).many(small_data)
+        items3 = Filter(Key('registered.$strptime.$attr("year")').gte(2016)).many(small_data)
 
         self.assertEqual(9, len(items))
         self.assertEqual(6, len(items2))
         self.assertEqual(13, len(items3))
 
     def test_interval(self):
-        key = Key('registered.$strptime.$datetime("year")')
+        key = Key('registered.$strptime.$attr("year")')
         items = Filter(key.interval([2016, 2017])).many(small_data)
         items2 = Filter(
-            (key >= 2016) & (key <= 2017)
+            (key >= 2016) & (key.lte(2017))
         ).many(small_data)
 
         self.assertEqual(7, len(items))
         self.assertEqual(len(items), len(items2))
 
     def test_not_interval(self):
-        key = Key('registered.$strptime.$datetime("year")')
+        key = Key('registered.$strptime.$attr("year")')
         items = Filter(key.not_interval([2016, 2017])).many(small_data)
         items2 = Filter(
-            (key < 2016) | (key > 2017)
+            (key.lt(2016)) | (key > 2017)
         ).many(small_data)
 
         self.assertEqual(13, len(items))
         self.assertEqual(len(items), len(items2))
+
+    def test_membership_set(self):
+        data = {
+            "set": {1, 2, 3},
+            "value": 5
+        }
+
+        self.assertTrue(Filter(Key("set").contains(2)).single(data))
+        self.assertFalse(Filter(Key("set").contains(5)).single(data))
+
+        self.assertTrue(Filter(Key("set").not_contains(5)).single(data))
+        self.assertFalse(Filter(Key("set").not_contains(2)).single(data))
+
+        self.assertTrue(Filter(Key("value").in_({5, 6, 7})).single(data))
+        self.assertFalse(Filter(Key("value").in_({6, 7})).single(data))
+
+        self.assertFalse(Filter(Key("value").nin({5, 6, 7})).single(data))
+        self.assertTrue(Filter(Key("value").nin({6, 7})).single(data))
+
+    def test_membership_list(self):
+        data = {
+            "list": [1, 2, 3],
+            "value": 5
+        }
+
+        self.assertTrue(Filter(Key("list").contains(2)).single(data))
+        self.assertFalse(Filter(Key("list").contains(5)).single(data))
+
+        self.assertTrue(Filter(Key("list").not_contains(5)).single(data))
+        self.assertFalse(Filter(Key("list").not_contains(2)).single(data))
+
+        self.assertTrue(Filter(Key("value").in_([5, 6, 7])).single(data))
+        self.assertFalse(Filter(Key("value").in_([6, 7])).single(data))
+
+        self.assertFalse(Filter(Key("value").nin([5, 6, 7])).single(data))
+        self.assertTrue(Filter(Key("value").nin([6, 7])).single(data))
+
+    def test_membership_dict(self):
+        data = {
+            "dict": {1: "1", 2: "2", 3: "3"},
+            "value": 5
+        }
+
+        self.assertTrue(Filter(Key("dict").contains(2)).single(data))
+        self.assertFalse(Filter(Key("dict").contains(5)).single(data))
+
+        self.assertTrue(Filter(Key("dict").not_contains(5)).single(data))
+        self.assertFalse(Filter(Key("dict").not_contains(2)).single(data))
+
+        self.assertTrue(Filter(Key("value").in_({5: "5", 6: "6", 7: "7"})).single(data))
+        self.assertFalse(Filter(Key("value").in_({6: "6", 7: "7"})).single(data))
+
+        self.assertFalse(Filter(Key("value").nin({5: "5", 6: "6", 7: "7"})).single(data))
+        self.assertTrue(Filter(Key("value").nin({6: "6", 7: "7"})).single(data))
+
+    def test_membership_str(self):
+        data = {
+            "str": "123",
+            "value": "5"
+        }
+
+        self.assertTrue(Filter(Key("str").contains("2")).single(data))
+        self.assertFalse(Filter(Key("str").contains("5")).single(data))
+
+        self.assertTrue(Filter(Key("str").not_contains("5")).single(data))
+        self.assertFalse(Filter(Key("str").not_contains("2")).single(data))
+
+        self.assertTrue(Filter(Key("value").in_("5, 6, 7")).single(data))
+        self.assertFalse(Filter(Key("value").in_("6, 7")).single(data))
+
+        self.assertFalse(Filter(Key("value").nin("5, 6, 7")).single(data))
+        self.assertTrue(Filter(Key("value").nin("6, 7")).single(data))
+
+    def test_starts_and_endswith(self):
+        self.assertTrue(
+            Filter([{"field": "name", "operator": "endswith", "value": "Weiss"}]).single(small_data[2])
+        )
+        self.assertTrue(
+            Filter(Key("name").endswith("Weiss")).single(small_data[2])
+        )
+        self.assertTrue(
+            Filter(Key("name").startswith("Dotson")).single(small_data[2])
+        )
+
+    def test_present(self):
+        self.assertTrue(
+            Filter(Key("name").present()).single(small_data[0])
+        )
+        self.assertTrue(
+            Filter(Key("not_present").not_present()).single(small_data[0])
+        )
+
+    def test_equality(self):
+        self.assertEqual(1, len(Filter(Key("company") == "XYLAR").many(small_data)))
+        self.assertEqual(1, len(Filter(Key("company").eq("XYLAR")).many(small_data)))
+        self.assertEqual(1, len(Filter(Key("company").seq("XYLAR")).many(small_data)))
+
+        self.assertEqual(19, len(Filter(Key("company") != "XYLAR").many(small_data)))
+        self.assertEqual(19, len(Filter(Key("company").ne("XYLAR")).many(small_data)))
+        self.assertEqual(19, len(Filter(Key("company").sne("XYLAR")).many(small_data)))
 
 
 if __name__ == "__main__":

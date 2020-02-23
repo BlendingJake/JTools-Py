@@ -1,6 +1,6 @@
 from .getter import Getter
 import re
-from typing import Union
+from typing import Union, List
 import logging
 from os import environ
 import json
@@ -19,13 +19,16 @@ class Formatter:
 
     logger.debug(f"Full Replacement: {_full_replacement}")
 
-    def __init__(self, spec: str, fallback=None):
+    def __init__(self, spec: str, fallback: any = None):
         self.fallback = fallback
         self.failed = False
         self.spec = spec
 
-    def format(self, item: Union[list, dict]) -> str:
+    def single(self, item: Union[list, dict]) -> Union[str, any]:
         return self._replace(self.spec, item)
+
+    def many(self, items: List[Union[list, dict]]) -> List[Union[str, any]]:
+        return [self.single(item) for item in items]
 
     def _replace(self, spec: str, item: Union[list, dict]) -> str:
         logger.debug(f"starting with {spec}")
@@ -60,4 +63,4 @@ class Formatter:
 
 if __name__ == "__main__":
     test = {"env": {"VERSION": "1.0.0"}}
-    print(Formatter("build/{{env.VERSION}}").format(test))
+    print(Formatter("build/{{env.VERSION}}").single(test))

@@ -103,6 +103,12 @@ class Key:
     def ne(self, other):
         return self != other
 
+    def seq(self, other):
+        return Condition(self.field, "===", other)
+
+    def sne(self, other):
+        return Condition(self.field, "!==", other)
+
     def in_(self, other):
         return Condition(self.field, "in", other)
 
@@ -127,11 +133,11 @@ class Key:
     def endswith(self, other):
         return Condition(self.field, "endswith", other)
 
-    def none(self, other):
-        return Condition(self.field, "null", other)
+    def present(self):
+        return Condition(self.field, "present", None)
 
-    def not_none(self, other):
-        return Condition(self.field, "!null", other)
+    def not_present(self):
+        return Condition(self.field, "!present", None)
 
 
 class Filter:
@@ -142,6 +148,8 @@ class Filter:
         "<=": lambda field, value: field <= value,
         "==": lambda field, value: field == value,
         "!=": lambda field, value: field != value,
+        "===": lambda field, value: field == value,
+        "!==": lambda field, value: field != value,
 
         "in": lambda field, value: field in value,
         "!in": lambda field, value: field not in value,
@@ -154,11 +162,12 @@ class Filter:
         "startswith": lambda field, value: field.startswith(value),
         "endswith": lambda field, value: field.endswith(value),
 
-        "null": lambda field, _: field is None,
-        "!null": lambda field, _: field is not None
+        "present": lambda field, _: field is not None,
+        "!present": lambda field, _: field is None,
     }
 
-    def __init__(self, filters: Union[Condition, List[dict]], convert_ints=True, empty_filters_response=True):
+    def __init__(self, filters: Union[Condition, List[dict]], convert_ints: bool = True,
+                 empty_filters_response: bool = True):
         """
         Prepare a filter object from a list of filters, or from a condition object
         :param filters: The filters
