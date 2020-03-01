@@ -8,6 +8,24 @@ else:
 # This class defines a complete listener for a parse tree produced by QUERYParser.
 class QUERYListener(ParseTreeListener):
 
+    # Enter a parse tree produced by QUERYParser#multi_query.
+    def enterMulti_query(self, ctx:QUERYParser.Multi_queryContext):
+        pass
+
+    # Exit a parse tree produced by QUERYParser#multi_query.
+    def exitMulti_query(self, ctx:QUERYParser.Multi_queryContext):
+        pass
+
+
+    # Enter a parse tree produced by QUERYParser#raw_text.
+    def enterRaw_text(self, ctx:QUERYParser.Raw_textContext):
+        pass
+
+    # Exit a parse tree produced by QUERYParser#raw_text.
+    def exitRaw_text(self, ctx:QUERYParser.Raw_textContext):
+        pass
+
+
     # Enter a parse tree produced by QUERYParser#query.
     def enterQuery(self, ctx:QUERYParser.QueryContext):
         pass
@@ -59,15 +77,6 @@ class QUERYListener(ParseTreeListener):
 
     # Exit a parse tree produced by QUERYParser#arguments.
     def exitArguments(self, ctx:QUERYParser.ArgumentsContext):
-        pass
-
-
-    # Enter a parse tree produced by QUERYParser#argument.
-    def enterArgument(self, ctx:QUERYParser.ArgumentContext):
-        pass
-
-    # Exit a parse tree produced by QUERYParser#argument.
-    def exitArgument(self, ctx:QUERYParser.ArgumentContext):
         pass
 
 

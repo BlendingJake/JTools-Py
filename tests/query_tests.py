@@ -379,6 +379,47 @@ class TestGetter(unittest.TestCase):
         self.assertIsNone(Query("data.2", convert_ints=False).single({"data": [0, 1, 5]}))
         self.assertEqual(5, Query("data.2", convert_ints=False).single({"data": {"2": 5}}))
 
+    def test_nested_query(self):
+        params = {
+            "index": "name",
+            "origin": [0, 0],
+            "name": small_data[0]["name"],
+            "company": small_data[0]["company"],
+            "lookup": {
+                small_data[0]["name"]: small_data[0]["company"],
+            }
+        }
+        self.assertEqual(
+            [e["name"] for e in small_data[0]["friends"]],
+            Query("data.friends.$map('index', @params.index)").single({"data": small_data[0], "params": params})
+        )
+
+        lat = small_data[0]["latitude"]
+        lon = small_data[0]["longitude"]
+        self.assertEqual(
+            round(sum([(params["origin"][0] - lat)**2, (params["origin"][1] - lon)**2]) ** 0.5, 2),
+            Query("params.origin.$distance([@data.latitude, @data.longitude]).$round").single(
+                {"data": small_data[0], "params": params}
+            )
+        )
+
+        self.assertEqual(
+            params["lookup"][small_data[0]["name"]],
+            Query("data.name.$lookup(@params.lookup)").single({"data": small_data[0], "params": params})
+        )
+
+        self.assertEqual(
+            params["lookup"][small_data[0]["name"]],
+            Query("data.name.$lookup({@params.name: @params.company})").single(
+                {"data": small_data[0], "params": params}
+            )
+        )
+
+        self.assertEqual(
+            f"Lat={small_data[0]['latitude']} & Lon={small_data[0]['longitude']}",
+            Query('latitude.$wrap("Lat=", @longitude.$prefix(" & Lon="))').single(small_data[0])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

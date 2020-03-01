@@ -1,6 +1,7 @@
-from typing import Union, Any, Dict, Callable, List
-from query import QueryParseError
-from .grammar import QueryBuilder
+from typing import Union, Any, Dict, Callable, List, Optional
+from .grammar import (
+    QueryBuilder, QueryParseError, Query as QueryPart, Special, Field, ListValue, DictValue, SetValue, Value
+)
 import logging
 from datetime import datetime, timezone
 import math
@@ -106,26 +107,31 @@ class Query:
 
     _specials["map"] = lambda value, special, *args: [Query._specials[special](v, *args) for v in value]
 
-    def __init__(self, field: Union[str, List[str]], convert_ints: bool = True, fallback: any = None):
+    def __init__(self,
+                 field: Union[str, List[str], QueryPart, List[QueryPart]], convert_ints: bool = True,
+                 fallback: any = None):
         """
         Create an object for a specific field query string or strings.
-        :param field: The field query string (or strings),
+        :param field: The field query string (or strings) or the query parts.
         :param convert_ints: Whether to convert <field> values that are digits to be ints to allow array indexing, or
             whether to leave them as strings.
         :param fallback: A fallback value that will be used a field cannot be found on a given object
         """
-        self.multiple: bool = isinstance(field, (list, tuple))
-        self.fields: List[str] = field if self.multiple else [field]
+        self.multiple: bool = not (isinstance(field, str) or isinstance(field, QueryPart))
+        self.fields: Union[List[str], List[QueryPart]] = field if self.multiple else [field]
         self.fallback = fallback
         self.convert_ints = convert_ints
 
-        self.parts: List[dict] = []
+        self.parts: List[Optional[QueryPart]] = []
         for f in self.fields:
-            try:
-                p = QueryBuilder(f, convert_ints=self.convert_ints).get_build_query()
-                self.parts.append(p)
-            except QueryParseError:
-                self.parts.append({})
+            if isinstance(f, QueryPart):
+                self.parts.append(f)
+            else:
+                try:
+                    p = QueryBuilder(f, convert_ints=self.convert_ints).get_built_query()
+                    self.parts.append(p)
+                except QueryParseError:
+                    self.parts.append(None)
 
         logger.debug(f"got parts: {self.parts}")
 
@@ -157,44 +163,56 @@ class Query:
         """
         values = []
         for query in self.parts:
-            values.append(self._query(item, query))
+            if query is not None:
+                values.append(self._query(item, query))
+            else:
+                values.append(self.fallback)
 
         return values if self.multiple else values[0]
 
-    def _query(self, value, query):
-        for part in query["parts"]:
+    def _query(self, value, query: QueryPart):
+        original = value
+        for part in query.parts:
             if value != self.fallback:
-                if part["type"] == "field":
+                if isinstance(part, Field):
                     if isinstance(value, list):
-                        if isinstance(part["field"], int) and 0 <= part["field"] < len(value):
-                            value = value[part["field"]]
+                        if isinstance(part.field, int) and 0 <= part.field < len(value):
+                            value = value[part.field]
                         else:
                             value = self.fallback
                     else:
-                        if part["field"] in value:
-                            value = value[part["field"]]
+                        if part.field in value:
+                            value = value[part.field]
                         else:
                             value = self.fallback
-                elif part["type"] == "special":
+                elif isinstance(part, Special):
                     arguments = []
                     arguments_safe = True
 
-                    for arg in part["arguments"]:
-                        if arg["type"] == "value":
-                            arguments.append(arg["value"])
+                    for arg in part.arguments:
+                        v = self._value(original, arg)
+                        if v != self.fallback:
+                            arguments.append(v)
                         else:
-                            qr = self._query(value, arg)
-
-                            if qr != self.fallback:
-                                arguments.append(qr)
-                            else:
-                                value = self.fallback
-                                arguments_safe = False
+                            value = self.fallback
+                            arguments_safe = False
 
                     if arguments_safe:
-                        value = self._specials[part["special"]](value, *arguments)
+                        value = self._specials[part.special](value, *arguments)
 
         return value
+
+    def _value(self, value, q_or_v: Union[QueryPart, Value]):
+        if isinstance(q_or_v, QueryPart):
+            return self._query(value, q_or_v)
+        elif isinstance(q_or_v, ListValue):
+            return [self._value(value, part) for part in q_or_v.value]
+        elif isinstance(q_or_v, DictValue):
+            return {self._value(value, k): self._value(value, v) for k, v in q_or_v.value.items()}
+        elif isinstance(q_or_v, SetValue):
+            return {self._value(value, part) for part in q_or_v.value}
+        else:
+            return q_or_v.value
 
     def many(self, items: List[Union[list, dict]]) -> Union[List[Any], List[List[Any]]]:
         return [self.single(item) for item in items]

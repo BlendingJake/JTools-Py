@@ -1,9 +1,8 @@
 from .query import Query
-import re
+from .grammar import QueryParseError, MultiQueryBuilder, MultiQuery, Query as QueryPart
 from typing import Union, List
 import logging
 from os import environ
-import json
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -13,52 +12,43 @@ __all__ = ["Formatter"]
 
 
 class Formatter:
-    _full_replacement = r"{{\s*"+Query.full_regex()+r"\s*}}"
-    _replacement_pattern = re.compile(_full_replacement)
     MISSING = object()
 
-    logger.debug(f"Full Replacement: {_full_replacement}")
-
-    def __init__(self, spec: str, fallback: any = None):
+    def __init__(self, spec: str, fallback: any = None, convert_ints: bool = True):
         self.fallback = fallback
-        self.failed = False
+        self.convert_ints = convert_ints
         self.spec = spec
+        self.multi_query = None
+
+        try:
+            mq = MultiQueryBuilder(self.spec, convert_ints).get_built_query()
+            self.multi_query = mq
+        except QueryParseError:
+            pass
 
     def single(self, item: Union[list, dict]) -> Union[str, any]:
-        return self._replace(self.spec, item)
+        return self._format(self.multi_query, item)
 
     def many(self, items: List[Union[list, dict]]) -> List[Union[str, any]]:
         return [self.single(item) for item in items]
 
-    def _replace(self, spec: str, item: Union[list, dict]) -> str:
-        logger.debug(f"starting with {spec}")
-        updated = self._replacement_pattern.sub(lambda match: self._replacer(match, item), spec)
-        logger.debug(f"after replacement {updated}")
-
-        if self.failed:
+    def _format(self, mq: MultiQuery, item):
+        if mq is None:
             return self.fallback
         else:
-            if updated != spec:  # we changed stuff
-                return self._replace(updated, item)
-            else:
-                return updated
+            output = []
+            for part in mq.queries:
+                if isinstance(part, QueryPart):
+                    v = Query(part, self.convert_ints, self.MISSING).single(item)
+                else:
+                    v = part.text
 
-    def _replacer(self, match, item: Union[list, dict]) -> str:
-        groups = match.groups()
-        field = groups[0]
-        if groups[2]:
-            field += groups[2]
+                if v is self.MISSING:
+                    return self.fallback
+                else:
+                    output.append(v)
 
-        result = Query(field, fallback=self.MISSING).single(item)
-        logger.debug(f"field: {field}, got: {result}")
-        if result is self.MISSING:
-            self.failed = True
-            return ""
-        else:
-            if isinstance(result, (list, dict)):
-                return json.dumps(result)
-            else:
-                return str(result)
+            return "".join(str(p) for p in output)
 
 
 if __name__ == "__main__":

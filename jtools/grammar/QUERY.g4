@@ -1,5 +1,13 @@
 grammar QUERY;
 
+multi_query
+    : raw_text ('@' query raw_text)*
+    ;
+
+raw_text
+    : (SYMBOL | ' ' | '\n' | '\r' | '\t' | '\f' | '@@' | ~'@')*
+    ;
+
 query
     : query_part ('.' query_part)*
     ;
@@ -18,17 +26,13 @@ special
 special_name: name ;
 
 arguments
-    : '(' argument (',' argument)* ')'
+    : '(' value (',' value)* ')'
     | '(' ')'
     ;
 
-argument
-    : value
-    | ':' query
-    ;
-
 value
-    : list_value
+    : '@' query
+    | list_value
     | set_value
     | object_value
     | number
@@ -55,7 +59,7 @@ object_value
 
 pair: key ':' value ;
 
-key: STRING | number | 'true' | 'false' | 'null' ;
+key: '@' query | STRING | number | 'true' | 'false' | 'null' ;
 
 number
     : ('-' | '+')? DIGITS '.' DIGITS
@@ -68,6 +72,7 @@ name
 
 DIGITS: [0-9]+ ;
 LETTERS: [a-zA-Z]+;
+SYMBOL: [~!#$%^&*()_+=\-`[\]{};':",./<>?\\|];
 STRING
     : '"' ('\\"' | ~'"')* '"'
     | '\'' ('\\\'' | ~'\'')* '\''

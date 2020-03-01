@@ -1,23 +1,19 @@
-from typing import List, Type
+from typing import List, Type, Union
 from antlr4 import *
 from antlr4.error.ErrorStrategy import DefaultErrorStrategy
 from antlr4.error.Errors import InputMismatchException
-
-from QUERYLexer import QUERYLexer
-from QUERYParser import QUERYParser
-from QUERYListener import QUERYListener
+from .QUERYLexer import QUERYLexer
+from .QUERYParser import QUERYParser
+from .QUERYListener import QUERYListener
 import logging
 from os import environ
 
-logging.basicConfig()
+logging.basicConfig(format='%(levelname)s:%(module)s:%(funcName)s:%(lineno)d}: %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(environ.get("JTOOLS:GRAMMAR:QUERY:LOGGING_LEVEL", "INFO"))
 
-__all__ = ['QueryBuilder', 'QueryParseError']
-
-
-class Part:
-    pass
+__all__ = ['QueryBuilder', 'QueryParseError', 'MultiQueryBuilder', "MultiQuery", "RawInput",
+           "Query", "Field", "Special", "ListValue", "SetValue", "DictValue", "Value"]
 
 
 class Value:
@@ -26,9 +22,9 @@ class Value:
         self.value = None
 
     def __repr__(self):
-        return f"<Value: value={self.value} type={type(self.value)}>"
+        return f"<Value: value={repr(self.value)}>"
 
-    def add_value(self, value):
+    def add(self, value):
         pass
 
     def get_value(self):
@@ -43,7 +39,7 @@ class ListValue(Value):
     def __repr__(self):
         return f"<List values={self.value}>"
 
-    def add_value(self, value):
+    def add(self, value):
         self.value.append(value)
 
     def get_value(self):
@@ -58,7 +54,7 @@ class SetValue(Value):
     def __repr__(self):
         return f"<Set values={self.value}>"
 
-    def add_value(self, value):
+    def add(self, value):
         self.value.add(value)
 
     def get_value(self):
@@ -66,60 +62,69 @@ class SetValue(Value):
 
 
 class DictValue(Value):
+    MISSING = object()
+
     def __init__(self):
         super().__init__()
         self.value = {}
-        self.key = None
+        self.key = self.MISSING
 
     def __repr__(self):
         return f"<Dict values={self.value}>"
 
-    def add_key(self, key):
-        self.key = key
-
-    def add_value(self, value):
-        self.value[self.key] = value
+    def add(self, value):
+        if self.key is self.MISSING:
+            self.key = value
+        else:
+            self.value[self.key] = value
+            self.key = self.MISSING
 
     def get_value(self):
         return {key: value.get_value() for key, value in self.value.items()}
 
 
+class Part:
+    def get_value(self):
+        pass
+
+
 class Field(Part):
     def __init__(self):
-        logger.debug("creating field...")
         self.field = None
 
     def __repr__(self):
         return f"<Field '{self.field}'>"
 
-    def set_field(self, field: str):
-        logger.debug(f"field is: {field}")
+    def set_field(self, field: Union[str, int]):
         self.field = field
+
+    def get_value(self):
+        return self.field
 
 
 class Special(Part):
     def __init__(self):
-        logger.debug("creating special...")
         self.special = None
         self.arguments = []
-
-        self.value = None
 
     def __repr__(self):
         return f"<Special '{self.special}' args={self.arguments}>"
 
     def set_special(self, special: str):
-        logger.debug(f"special is: {special}")
         self.special = special
 
-    def add_argument(self, argument):
-        logger.debug(f"adding argument: {argument}")
+    def add(self, argument):
         self.arguments.append(argument)
+
+    def get_value(self):
+        return {
+            "special": self.special,
+            "arguments": [arg.get_value() for arg in self.arguments]
+        }
 
 
 class Query:
     def __init__(self):
-        logger.debug("creating query...")
         self.parent = None
         self.parts: List[Part] = []
 
@@ -127,42 +132,78 @@ class Query:
         return f"<Query parts={self.parts}>"
 
     def add(self, part: Part):
-        logger.debug(f"adding part: {part}")
         self.parts.append(part)
 
     def last(self):
         return self.parts[-1]
 
+    def get_value(self):
+        return [part.get_value() for part in self.parts]
+
+
+class RawInput:
+    def __init__(self):
+        self.text = None
+
+    def set_text(self, text: str):
+        self.text = text
+
+
+class MultiQuery:
+    def __init__(self):
+        self.queries: List[Union[Query, RawInput]] = []
+
+    def add(self, query):
+        self.queries.append(query)
+
 
 class QueryListener(QUERYListener):
-    def __init__(self):
+    def __init__(self, convert_ints=True):
+        self.stack = []
+        self.convert_ints = convert_ints
         self.root = None
-        self.current = self.root
 
     def enterQuery(self, ctx: QUERYParser.QueryContext):
-        if self.root is None:
-            self.root = Query()
-            self.current = self.root
+        q = Query()
+        if self.stack:  # have stuff on the stack, so this must be a value or argument
+            self.stack[-1].add(q)
         else:
-            self.current = Query()
-            self.current.parent = self.root
-            self.root.last().add_argument(self.current)
+            self.root = q
+
+        self.stack.append(q)
+        logger.debug(self.stack)
 
     def exitQuery(self, ctx: QUERYParser.QueryContext):
-        logger.debug(f"exiting query: {self.current}")
-        if self.current.parent is not None:
-            self.current = self.current.parent
+        self.stack.pop()
+        logger.debug(self.stack)
 
     def exitQuery_field(self, ctx: QUERYParser.Query_fieldContext):
         f = Field()
         f.set_field(ctx.getText())
-        self.current.add(f)
+
+        if self.convert_ints:
+            try:
+                fi = int(f.field)
+                f.set_field(fi)
+            except ValueError:
+                pass
+
+        self.stack[-1].add(f)
+        logger.debug(self.stack)
 
     def enterSpecial(self, ctx: QUERYParser.SpecialContext):
-        self.current.add(Special())
+        s = Special()
+        self.stack[-1].add(s)
+        self.stack.append(s)
+        logger.debug(self.stack)
+
+    def exitSpecial(self, ctx: QUERYParser.SpecialContext):
+        self.stack.pop()
+        logger.debug(self.stack)
 
     def exitSpecial_name(self, ctx: QUERYParser.Special_nameContext):
-        self.current.last().set_special(ctx.getText())
+        self.stack[-1].set_special(ctx.getText())
+        logger.debug(self.stack)
 
     def enterList_value(self, ctx: QUERYParser.List_valueContext):
         self.enter_value(ListValue)
@@ -174,25 +215,23 @@ class QueryListener(QUERYListener):
         self.enter_value(DictValue)
 
     def exitKey(self, ctx: QUERYParser.KeyContext):
-        self.last_value().add_key(self.parse_primitive(ctx.getText()))
+        txt = ctx.getText()
+        if txt[0] != '@':  # query will add itself
+            v = Value()
+            v.value = self.parse_primitive(ctx.getText())
+            self.stack[-1].add(v)
+        logger.debug(self.stack)
 
     def exitValue(self, ctx: QUERYParser.ValueContext):
+        # 2 types of values we can have - primitive or already parsed value
         text = ctx.getText()
-        if text[0] not in ("[", "{"):
-            value = Value()
-            value.value = self.parse_primitive(text)
-
-            if self.last_value() is None:
-                self.last().add_argument(value)
-            else:
-                self.last_value().add_value(value)
-        else:
-            logger.debug(f"exiting with value: {self.last_value().get_value()}")
-            if self.last_value().parent is None:
-                self.last().add_argument(self.last_value())
-                self.last().value = None
-            else:
-                self.last().value = self.last_value().parent
+        if text[0] in ("[", "{"):
+            self.stack.pop()
+        elif text[0] != "@":  # query will pop itself on exitQuery
+            val = Value()
+            val.value = self.parse_primitive(text)
+            self.stack[-1].add(val)
+        logger.debug(self.stack)
 
     # helpers
     @classmethod
@@ -212,21 +251,28 @@ class QueryListener(QUERYListener):
 
         return value
 
-    def last(self):
-        return self.current.last()
-
-    def last_value(self):
-        return self.last().value
-
     def enter_value(self, cls: Type[Value]):
-        if self.current.last().value is None:
-            self.current.last().value = cls()
-        else:
-            v = cls()
-            v.parent = self.current.last().value
+        v = cls()
+        self.stack[-1].add(v)
+        self.stack.append(v)
+        logger.debug(self.stack)
 
-            self.current.last().value.add_value(v)
-            self.current.last().value = v
+
+class MultiQueryListener(QueryListener):
+    def __init__(self, convert_ints=True):
+        super().__init__(convert_ints)
+
+    def enterMulti_query(self, ctx: QUERYParser.Multi_queryContext):
+        self.root = MultiQuery()
+        self.stack.append(self.root)
+
+    def exitMulti_query(self, ctx: QUERYParser.Multi_queryContext):
+        self.stack.pop()
+
+    def exitRaw_text(self, ctx: QUERYParser.Raw_textContext):
+        raw = RawInput()
+        raw.set_text(ctx.getText())
+        self.stack[-1].add(raw)
 
 
 class QueryParseError(Exception):
@@ -238,71 +284,68 @@ class ParserErrorStrategy(DefaultErrorStrategy):
     def reportError(self, recognizer: Parser, e: RecognitionException):
         if isinstance(e, InputMismatchException):
             raise QueryParseError(str(e))
-            return
         else:
             super().reportError(recognizer, e)
 
 
-class QueryBuilder:
-    def __init__(self, query: str, convert_ints=True):
+class Builder:
+    def __init__(self, text: str, convert_ints=True):
         self.convert_ints = convert_ints
-        self.query = query
-        self.input_stream = InputStream(self.query)
+        self.text = text
+
+        self.input_stream = InputStream(self.text)
         self.lexer = QUERYLexer(self.input_stream)
         self.stream = CommonTokenStream(self.lexer)
         self.parser = QUERYParser(self.stream)
         self.parser._errHandler = ParserErrorStrategy()
-        self.tree = self.parser.query()
 
-        self.printer = QueryListener()
+
+class QueryBuilder(Builder):
+    def __init__(self, text: str, convert_ints=True):
+        super().__init__(text, convert_ints)
+
+        self.tree = self.parser.query()
+        self.printer = QueryListener(convert_ints=self.convert_ints)
         self.walker = ParseTreeWalker()
         self.walker.walk(self.printer, self.tree)
 
-        self.parsed_query = self.simplify_query(self.printer.root)
+        logger.debug(self.printer.root)
 
-    def get_build_query(self) -> dict:
-        return self.parsed_query
+    def get_built_query(self) -> Query:
+        return self.printer.root
 
-    def simplify_query(self, query: Query) -> dict:
-        data = {
-            "type": "query",
-            "parts": []
-        }
 
-        for part in query.parts:
-            if isinstance(part, Field):
-                field = part.field
+class MultiQueryBuilder(Builder):
+    def __init__(self, text: str, convert_ints=True):
+        super().__init__(text, convert_ints)
 
-                if self.convert_ints:
-                    try:
-                        fi = int(field)
-                        field = fi
-                    except ValueError:
-                        pass
+        self.tree = self.parser.multi_query()
+        self.printer = MultiQueryListener(convert_ints=self.convert_ints)
+        self.walker = ParseTreeWalker()
+        self.walker.walk(self.printer, self.tree)
 
-                data["parts"].append({
-                    "type": "field",
-                    "field": field
-                })
-            elif isinstance(part, Special):
-                data["parts"].append(self.simplify_special(part))
+        logger.debug(self.printer.root)
 
-        return data
+    def get_built_query(self) -> MultiQuery:
+        return self.printer.root
 
-    def simplify_special(self, special: Special) -> dict:
-        data = {
-            "type": "special",
-            "special": special.special,
-            "arguments": []
-        }
 
-        for arg in special.arguments:
-            if isinstance(arg, Query):
-                data["arguments"].append(self.simplify_query(arg))
-            else:
-                data["arguments"].append({
-                    "type": "value",
-                    "value": arg.get_value()
-                })
+if __name__ == "__main__":
+    logger.setLevel(logging.DEBUG)
 
-        return data
+    QueryBuilder("tests")
+    QueryBuilder("tests.test")
+    QueryBuilder("tests.$wrap")
+    QueryBuilder("$wrap")
+    QueryBuilder("$wrap.text")
+    QueryBuilder("$wrap(5)")
+    QueryBuilder("$wrap('5')")
+    QueryBuilder('$wrap("5")')
+    QueryBuilder('$wrap(-4.5)')
+    QueryBuilder('$wrap([], {}, {:}, true, false, null, "true")')
+    QueryBuilder('$wrap([1, 2], {3, "4"}, {4: 5, "true": false})')
+    QueryBuilder('$wrap(@prefix, [5, @prefix])')
+    QueryBuilder('$wrap(@prefix, [5, @prefix.$sum, @prefix.$join(", ")])')
+    QueryBuilder('$wrap({@prefix: "john", @prefix: @prefix, "john": @prefix})')
+
+    MultiQueryBuilder("@tests.test something else @tests.$wrap")
