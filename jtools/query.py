@@ -1,9 +1,9 @@
 from typing import Union, Any, Dict, Callable, List
-import re
+from query import QueryParseError
+from .grammar import QueryBuilder
 import logging
 from datetime import datetime, timezone
 import math
-import json
 from os import environ
 from dateutil.parser import parse
 
@@ -11,7 +11,7 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
 
-__all__ = ["Getter"]
+__all__ = ["Query"]
 
 
 def parse_dt_string(value, fmt=None):
@@ -21,32 +21,38 @@ def parse_dt_string(value, fmt=None):
         return datetime.strptime(value, fmt)
 
 
-class Getter:
+def wildcard(value: dict, nxt: Union[str, int], just_field=True):
+    out = []
+    for v in value.values():
+        if (isinstance(v, dict) and nxt in v) or (
+                # check if this object has the ability to get a specific index
+                not isinstance(v, dict) and isinstance(nxt, int) and getattr(
+                v, "__getitem__", None) is not None and 0 <= nxt < len(v)
+        ):
+            if just_field:
+                out.append(v[nxt])
+            else:
+                out.append(v)
+
+    return out
+
+
+class Query:
     """
     FieldGetter provides a powerful way to access that attributes of JSON-like data and perform
-    manipulations on them. The `field` notation is listed below by the constructor.
+    manipulations on them.
     """
-    _arguments = r"""((?:(?!{{)(?:(?:"(?!{{)[^"]*")|[^\)]))*)"""
-    _func_def = r"(?:\$[a-z_]+(?:\(" + _arguments + r"\))?)"
-    _field = r"[-_a-zA-Z0-9]+"
-    _part = r"(?:\.(" + _func_def + "|" + _field + "))"
-
-    _part_pattern = re.compile(_part)
-    _full_field = "(" + _func_def + "|" + _field + ")(" + _part + "*)"
-    _full_pattern = re.compile(_full_field)
-
-    logger.debug(f"Function Def: {_func_def}")
-    logger.debug(f"Part Def: {_part}")
-    logger.debug(f"Full Def: {_full_field}")
 
     _specials: Dict[str, Callable] = {
         # general
         "length": lambda value: len(value),
+        "lookup": lambda value, mp, fallback=None: mp.get(value, fallback),
 
         # dict
         "keys": lambda value: list(value.keys()),
         "values": lambda value: list(value.values()),
         "items": lambda value: list(value.items()),
+        "wildcard": lambda value, nxt, just_field=True: wildcard(value, nxt, just_field),
 
         # type conversions
         "set": lambda value: set(value),
@@ -78,6 +84,7 @@ class Getter:
         # string
         "prefix": lambda value, prefix: f"{prefix}{value}",
         "suffix": lambda value, suffix: f"{value}{suffix}",
+        "wrap": lambda value, prefix, suffix: f"{prefix}{value}{suffix}",
         "strip": lambda value: value.strip(),
         "replace": lambda value, old, new: value.replace(old, new),
         "trim": lambda value, length=50, suffix="...": value[:length-len(suffix)]+(
@@ -90,29 +97,19 @@ class Getter:
         "join": lambda value, sep=", ": sep.join(str(i) for i in value),
         "index": lambda value, index: value[index],
         "range": lambda value, start, end=None: value[start: end if end is not None else len(value)],
+        "remove_nulls": lambda value: [v for v in value if v is not None],
 
         # attribute accessing
         "call": lambda value, func, *args: getattr(value, func)(*args),
         "attr": lambda value, attr: getattr(value, attr)
     }
 
-    _specials["map"] = lambda value, special, *args: [Getter._specials[special](v, *args) for v in value]
+    _specials["map"] = lambda value, special, *args: [Query._specials[special](v, *args) for v in value]
 
     def __init__(self, field: Union[str, List[str]], convert_ints: bool = True, fallback: any = None):
         """
-        Create a FieldGetter for a specific field query string.
+        Create an object for a specific field query string or strings.
         :param field: The field query string (or strings),
-                formatted [<field>|<special>][.<field>|.<special>]*
-            where:
-                field: An exact field name or index value to get from the items provided later with `.single` or `.many`
-                special: $<name>[([arg[, arg]*])] Any name in the `_specials` map above
-                arg: Any JSON-formatted value. Note: JSON requires strings to be double-quoted
-
-            Examples:
-                friends.$length
-                friends.$index(-1)  # get last friend
-                age.$subtract(2020).$abs  # basic age calculation
-                coordinate.$distance([0, 0])  # distance from origin in 2-D
         :param convert_ints: Whether to convert <field> values that are digits to be ints to allow array indexing, or
             whether to leave them as strings.
         :param fallback: A fallback value that will be used a field cannot be found on a given object
@@ -122,59 +119,22 @@ class Getter:
         self.fallback = fallback
         self.convert_ints = convert_ints
 
-        self.parts: List[list] = [self._process_field(f) for f in self.fields]
+        self.parts: List[dict] = []
+        for f in self.fields:
+            try:
+                p = QueryBuilder(f, convert_ints=self.convert_ints).get_build_query()
+                self.parts.append(p)
+            except QueryParseError:
+                self.parts.append({})
+
         logger.debug(f"got parts: {self.parts}")
 
     def __repr__(self):
         return f"Getter: {self.parts}"
 
-    def _process_field(self, field):
-        # splits into anchor field and then the rest of the parts
-        parts = []
-        match = self._full_pattern.match(field)
-        if match is not None:
-            full_groups = match.groups()
-            if full_groups[0][0] == "$":
-                parts.append(self._parse_special(full_groups[0], full_groups[1]))
-            else:
-                parts.append(full_groups[0])
-
-            if full_groups[2]:
-                for part in self._part_pattern.findall(full_groups[2]):
-                    if part[0][0] == "$":  # is a special
-                        parts.append(self._parse_special(part[0], part[1]))
-                    else:  # regular field
-                        if self.convert_ints:
-                            try:
-                                p = int(part[0])
-                                parts.append(p)
-                            except ValueError:
-                                parts.append(part[0])
-                        else:
-                            parts.append(part[0])
-        return parts
-
-    @classmethod
-    def _parse_special(cls, text: str, args_text: str) -> dict:
-        if "(" in text:
-            special = text[1:text.index("(")]
-        else:  # no args
-            special = text[1:]
-
-        if args_text:
-            logger.debug(f"going to load: [{args_text}]")
-            args = json.loads(f"[{args_text}]")
-        else:
-            args = []
-
-        return {
-            "special": special,
-            "args": args
-        }
-
     @classmethod
     def full_regex(cls):
-        return cls._full_field
+        return ""
 
     @classmethod
     def register_special(cls, name: str, func: Callable) -> bool:
@@ -196,35 +156,49 @@ class Getter:
         Get the field from the specified item
         """
         values = []
-        for field in self.parts:
-            value = item
-            if not field:
-                value = self.fallback
-            else:
-                for part in field:
-                    if value != self.fallback:
-                        if isinstance(part, dict):
-                            value = self._specials[part["special"]](value, *part["args"])
-                        else:
-                            if isinstance(value, list):
-                                if isinstance(part, int) and part < len(value):
-                                    value = value[part]
-                                else:
-                                    logger.debug(f"Could not find field '{part}'")
-                                    value = self.fallback
-                            else:
-                                if part in value:
-                                    value = value[part]
-                                else:
-                                    logger.debug(f"Could not find field '{part}'")
-                                    value = self.fallback
-            values.append(value)
+        for query in self.parts:
+            values.append(self._query(item, query))
 
         return values if self.multiple else values[0]
+
+    def _query(self, value, query):
+        for part in query["parts"]:
+            if value != self.fallback:
+                if part["type"] == "field":
+                    if isinstance(value, list):
+                        if isinstance(part["field"], int) and 0 <= part["field"] < len(value):
+                            value = value[part["field"]]
+                        else:
+                            value = self.fallback
+                    else:
+                        if part["field"] in value:
+                            value = value[part["field"]]
+                        else:
+                            value = self.fallback
+                elif part["type"] == "special":
+                    arguments = []
+                    arguments_safe = True
+
+                    for arg in part["arguments"]:
+                        if arg["type"] == "value":
+                            arguments.append(arg["value"])
+                        else:
+                            qr = self._query(value, arg)
+
+                            if qr != self.fallback:
+                                arguments.append(qr)
+                            else:
+                                value = self.fallback
+                                arguments_safe = False
+
+                    if arguments_safe:
+                        value = self._specials[part["special"]](value, *arguments)
+
+        return value
 
     def many(self, items: List[Union[list, dict]]) -> Union[List[Any], List[List[Any]]]:
         return [self.single(item) for item in items]
 
 
 if __name__ == "__main__":
-    print(Getter("found.missing", fallback="N/A").single({"found": {}}))
+    print(Query("found.missing", fallback="N/A").single({"found": {}}))

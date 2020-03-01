@@ -1,5 +1,5 @@
 from typing import Union, List, Dict, Any
-from .getter import Getter
+from .query import Query
 import logging
 from os import environ
 
@@ -61,6 +61,15 @@ class Condition:
 
     def filters(self) -> List[dict]:
         return self.output
+
+
+class ValueLessCondition:
+    def __init__(self, field: str, op: str):
+        self.field = field
+        self.op = op
+
+    def value(self, value: any) -> Condition:
+        return Condition(self.field, self.op, value)
 
 
 class Key:
@@ -139,6 +148,9 @@ class Key:
     def not_present(self):
         return Condition(self.field, "!present", None)
 
+    def operator(self, op: str) -> ValueLessCondition:
+        return ValueLessCondition(self.field, op)
+
 
 class Filter:
     _filters = {
@@ -182,10 +194,10 @@ class Filter:
             self.filters = filters
 
         logger.debug(filters)
-        self.getters = self._preprocess(self.filters, convert_ints)
-        logger.debug(self.getters)
+        self.queries = self._preprocess(self.filters, convert_ints)
+        logger.debug(self.queries)
 
-    def _preprocess(self, filters, convert_ints=True) -> Dict[str, Getter]:
+    def _preprocess(self, filters, convert_ints=True) -> Dict[str, Query]:
         out = {}
         for f in filters:
             if isinstance(f, list):
@@ -195,7 +207,7 @@ class Filter:
             elif "not" in f:
                 out.update(self._preprocess(f["not"], convert_ints))
             elif f["field"] not in out:
-                out[f["field"]] = Getter(f["field"], convert_ints=convert_ints)
+                out[f["field"]] = Query(f["field"], convert_ints=convert_ints)
 
         return out
 
@@ -212,7 +224,7 @@ class Filter:
             elif "not" in f:
                 c = not self._filter(item, f["not"])
             else:
-                c = self._filters[f["operator"]](self.getters[f["field"]].single(item), f["value"])
+                c = self._filters[f["operator"]](self.queries[f["field"]].single(item), f["value"])
 
             if overall is None:
                 overall = c

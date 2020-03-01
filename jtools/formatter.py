@@ -1,4 +1,4 @@
-from .getter import Getter
+from .query import Query
 import re
 from typing import Union, List
 import logging
@@ -13,7 +13,7 @@ __all__ = ["Formatter"]
 
 
 class Formatter:
-    _full_replacement = r"{{\s*" + Getter.full_regex() + r"\s*}}"
+    _full_replacement = r"{{\s*"+Query.full_regex()+r"\s*}}"
     _replacement_pattern = re.compile(_full_replacement)
     MISSING = object()
 
@@ -49,7 +49,7 @@ class Formatter:
         if groups[2]:
             field += groups[2]
 
-        result = Getter(field, fallback=self.MISSING).single(item)
+        result = Query(field, fallback=self.MISSING).single(item)
         logger.debug(f"field: {field}, got: {result}")
         if result is self.MISSING:
             self.failed = True

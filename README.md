@@ -9,6 +9,14 @@
 >The goal is to make the two versions work as identically as possible.
 
 ## Changelog
+ * `1.1.0`
+   * Rename `Getter` to `Query` to more accurately describe what the class does
+   * Added `$wrap(prefix, suffix)` to combine `$prefix` and `$suffix`
+   * Added `$remove_nulls`
+   * Added `$lookup(map, fallback=None)`
+   * Added `$wildcard(next, just_value=True)` which allows all values of an item to be collected if they contain
+   the specified field
+   
  * `1.0.6`
    * Add `===` and `!==` to match the strict equality checking needed in the JS version. 
    The methods `seq` and `sne` have been added to `Key` to correspond with the new filters.
@@ -36,7 +44,7 @@
      * `$strptime`
      * `$strftime`
    * Added `not` filtering and the `interval` and `!interval` operators
-   * Made `Filter` consistent with `Getter` by removing `.filter()` and adding
+   * Made `Filter` consistent with `Query` by removing `.filter()` and adding
    `.single()` and `.many()`
    * Added `fallback` to `Getter`
    * added numerous unit tests
@@ -51,7 +59,7 @@
 
 ## Glossary
  * [`Installation`](#install)
- * [`Getter`](#getter)
+ * [`Query`](#query)
    * [`Specials`](#specials)
  * [`Formatter`](#formatter)
  * [`Filter`](#filter)
@@ -63,13 +71,13 @@
 `pip install jtools`
 ```python
 # import
-from jtools import Getter, Filter, Key, Condition, Formatter
+from jtools import Query, Filter, Key, Condition, Formatter
 ```
 
-## <a name="getter">Getter</a>
->`Getter` on the surface is very simple: you give it a field query string (or several)
+## <a name="query">Query</a>
+>`Query` on the surface is very simple: you give it a field query string (or several)
 >and it returns the value (or values) at that path(s) from a given an item or list of items. 
->Example: `Getter("name").single({"name": "John"})` will return `"John"`.
+>Example: `Query("name").single({"name": "John"})` will return `"John"`.
 >However, there are many more cool features, like supporting dot-notation,
 >having the ability to transform values with specials, and even the ability 
 >to drill down into lists. Below is a fuller list of the features.
@@ -78,14 +86,14 @@ from jtools import Getter, Filter, Key, Condition, Formatter
  `.many(items)` can be used to get field(s) from a list of items
  
  * Multiple fields can be retrieved at once by passing a list of query strings, like
- `Getter(["name", "age"])`. Resulting values from `.single` and `.many` will be
+ `Query(["name", "age"])`. Resulting values from `.single` and `.many` will be
  lists of corresponding length.
  
  * Dot-notation is supported and can be used to access nested values. For
  example, `meta.id` can be used to get the `id` field from the item
  `{"meta": {"id": 1}}`, resulting in the value of `1`. 
  
- * Integer paths can be used to index lists as long as `Getter(..., convert_ints=True)`,
+ * Integer paths can be used to index lists as long as `Query(..., convert_ints=True)`,
  which is set to `True` by default. This allows paths like `friends.0`. However, `convert_ints=False`
  should be used if trying to access fields whose keys are strings containing digits, like
  `{"index": {"0": ...}}`
@@ -109,17 +117,31 @@ from jtools import Getter, Filter, Key, Condition, Formatter
  arguments, or the default arguments are acceptable.
  
  * More specials can be added by using the class attribute `.register_special()` 
- like so: `Getter.register_special(<name>, <func>)`. The function should take
+ like so: `Query.register_special(<name>, <func>)`. The function should take
  at least one argument, which is the current value in the query string: `lambda value, *args: ...`
  
 #### <a name="specials">Specials</a>
 General
   * `$length -> int`
+  * `$lookup(map: dict, fallback=None) -> any`: Lookup the current value in the provided map/dict 
   
 Maps
   * `$keys -> list`
   * `$values -> list`
   * `$items -> List[tuple]`
+  * `$wildcard(next, just_value=True) -> List[any]`: On a given map or list, go through all values and see if `next` is
+  a defined field. If it is, then return just the value of `next` on that item, if `just_value=True`, or the entire 
+  item otherwise. This special allows a nested field to be extracted across multiple items where it it present. 
+  For example: 
+```python
+data = {
+    "a": {"tag": "run"},
+    "b": {"tag": "todo", "other": "task"},
+    "meta": None
+}
+Query('$wildcard("tag")').single(data)  # => ["run", "todo"]
+Query('$wildcard("tag", False)').single(data) # => [{"tag": "run"}, {"tag": "todo", "other": "task"}]
+```
   
 Type Conversions
   * `$set -> set`
@@ -155,6 +177,7 @@ Math / Numbers
 Strings
   * `$prefix(prefix) -> str`: Prefix the value with the specified string
   * `$suffix(suffix) -> str`: Concatenate a string to the end of the value
+  * `$wrap(prefix, suffix) -> str`: Wrap a string with a prefix and suffix. Combines features of above to specials.
   * `$strip -> str`: Strip leading and trailing whitespace
   * `$replace(old, new) -> str`: Replace all occurrences of a string 
   * `$trim(length=50, suffix="...") -> str`: Trim the length of a string
@@ -165,7 +188,8 @@ Lists
   * `$join(sep=", ") -> str`: Join a list using the specified separator
   * `$index(index) -> any`: Index a list. Negative indices are allowed.
   * `$range(start, end=None) -> `: Get a sublist. Defaults to `value[start:]`, 
-  but an end value can be specified. Negative indices are allowed. 
+  but an end value can be specified. Negative indices are allowed.
+    * `$remove_nulls -> List[any]`: Remove any values that are `None`
   * `$map(special, *args) -> list`: Apply `special` to every element in the 
   value. Arguments can be passed through to the special being used.
   
@@ -178,11 +202,11 @@ Attributes
 >into a string. The basic usage is `Formatter(<spec>).single(<item>)`, although
 >`.many` exists as well.
 >Fields to be replaced should be wrapped in `{{}}` and any valid
->field query string for `Getter` can be used. For example, 
+>field query string for `Query` can be used. For example, 
 >`Formatter('Name: {{name}}').format({"name": "John Smith"})` results in
 >`Name: John Smith`. Below are some specific details.
 
- * The field specifications from `Getter` are valid here, so the above example
+ * The field specifications from `Query` are valid here, so the above example
  could instead be `'First Name: {{name.$split(" ").0}}'` to get `First Name: John`
  instead.
  
@@ -243,7 +267,7 @@ Formatter(
 >can be preformed 10,000 times in around 0.75 seconds.
 
 ## <a name="filter">Filter</a>
->`Filter` takes the field querying capabilities of `Getter` and combines it with 
+>`Filter` takes the field querying capabilities of `Query` and combines it with 
 >filtering conditions to allow lists of items to be filtered down to just those of 
 >interest. The basic usage is: `Filter(<filters>).many(<list of items>)`, although
 >`.single` can also be used to get a boolean answer of whether the item matches the filter or not.
@@ -265,7 +289,7 @@ Filter Schema:
 
     ...
 ]
-<field>: anything Getter accepts
+<field>: anything Query accepts
 <op>: See list below
 <value>: Anything that makes sense for the operator
 ``` 
@@ -357,22 +381,22 @@ Key('creation_time.$parse_timestamp.$attr("year")').lt(2005).or_(
 
 ## <a name="performance">Performance</a>
 >There are several ways to increase the performance of filtering and getting. The query strings within filters
->or those being passed directly to a `Getter` are parsed when the object is created. This means that using a `Getter`
+>or those being passed directly to a `Query` are parsed when the object is created. This means that using a `Query`
 >or `Filter` object multiple times will be faster then creating a new object every time. 
 >
 >For example:
 ```python
 # slower
 for item in items:
-    f = Getter("timestamp.$parse_timestamp").single(item)
+    f = Query("timestamp.$parse_timestamp").single(item)
     # do other stuff
 
 # faster
-getter = Getter("timestamp.$parse_timestamp")
+query = Query("timestamp.$parse_timestamp")
 for item in items:
-    f = getter.single(item)
+    f = query.single(item)
     # do other stuff
 ```
 
->Specifically, reusing a `Getter` can improve performance by 7-8x and reusing a `Filter` can improve
+>Specifically, reusing a `Query` can improve performance by 7-8x and reusing a `Filter` can improve
 >by 5-6x.

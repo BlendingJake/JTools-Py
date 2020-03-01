@@ -5,3 +5,5 @@ python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 # PyPI
 python setup.py sdist bdist_wheel
 python -m twine upload dist/*
+
+java -jar ../../Dependencies/Java/antlr-4.8-complete.jar -Dlanguage=Python3 jtools/grammar/QUERY.g4 -o jtools/grammar/
