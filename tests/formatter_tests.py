@@ -79,6 +79,12 @@ class TestFormatter(unittest.TestCase):
             Formatter("Name: @name").many(small_data[:3])
         )
 
+    def test_at_at(self):
+        self.assertEqual(
+            f"<redacted>@{small_data[0]['email'].split('@')[1]}",
+            Formatter("<redacted>@@@email.$split('@').1").single(small_data[0])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,5 @@
 from typing import Union, Any, Dict, Callable, List, Optional
-from .grammar import (
-    QueryBuilder, QueryParseError, Query as QueryPart, Special, Field, ListValue, DictValue, SetValue, Value
-)
+from .grammar import *
 import logging
 from datetime import datetime, timezone
 import math
@@ -108,7 +106,7 @@ class Query:
     _specials["map"] = lambda value, special, *args: [Query._specials[special](v, *args) for v in value]
 
     def __init__(self,
-                 field: Union[str, List[str], QueryPart, List[QueryPart]], convert_ints: bool = True,
+                 field: Union[str, List[str], JQLQuery, List[JQLQuery]], convert_ints: bool = True,
                  fallback: any = None):
         """
         Create an object for a specific field query string or strings.
@@ -117,20 +115,20 @@ class Query:
             whether to leave them as strings.
         :param fallback: A fallback value that will be used a field cannot be found on a given object
         """
-        self.multiple: bool = not (isinstance(field, str) or isinstance(field, QueryPart))
-        self.fields: Union[List[str], List[QueryPart]] = field if self.multiple else [field]
+        self.multiple: bool = not (isinstance(field, str) or isinstance(field, JQLQuery))
+        self.fields: Union[List[str], List[JQLQuery]] = field if self.multiple else [field]
         self.fallback = fallback
         self.convert_ints = convert_ints
 
-        self.parts: List[Optional[QueryPart]] = []
+        self.parts: List[Optional[JQLQuery]] = []
         for f in self.fields:
-            if isinstance(f, QueryPart):
+            if isinstance(f, JQLQuery):
                 self.parts.append(f)
             else:
                 try:
-                    p = QueryBuilder(f, convert_ints=self.convert_ints).get_built_query()
+                    p = JQLQueryBuilder(f, convert_ints=self.convert_ints).get_built_query()
                     self.parts.append(p)
-                except QueryParseError:
+                except JQLParseError:
                     self.parts.append(None)
 
         logger.debug(f"got parts: {self.parts}")
@@ -170,11 +168,11 @@ class Query:
 
         return values if self.multiple else values[0]
 
-    def _query(self, value, query: QueryPart):
+    def _query(self, value, query: JQLQuery):
         original = value
         for part in query.parts:
             if value != self.fallback:
-                if isinstance(part, Field):
+                if isinstance(part, JQLField):
                     if isinstance(value, list):
                         if isinstance(part.field, int) and 0 <= part.field < len(value):
                             value = value[part.field]
@@ -185,7 +183,7 @@ class Query:
                             value = value[part.field]
                         else:
                             value = self.fallback
-                elif isinstance(part, Special):
+                elif isinstance(part, JQLSpecial):
                     arguments = []
                     arguments_safe = True
 
@@ -202,14 +200,14 @@ class Query:
 
         return value
 
-    def _value(self, value, q_or_v: Union[QueryPart, Value]):
-        if isinstance(q_or_v, QueryPart):
+    def _value(self, value, q_or_v: Union[JQLQuery, JQLValue]):
+        if isinstance(q_or_v, JQLQuery):
             return self._query(value, q_or_v)
-        elif isinstance(q_or_v, ListValue):
+        elif isinstance(q_or_v, JQLList):
             return [self._value(value, part) for part in q_or_v.value]
-        elif isinstance(q_or_v, DictValue):
+        elif isinstance(q_or_v, JQLDict):
             return {self._value(value, k): self._value(value, v) for k, v in q_or_v.value.items()}
-        elif isinstance(q_or_v, SetValue):
+        elif isinstance(q_or_v, JQLSet):
             return {self._value(value, part) for part in q_or_v.value}
         else:
             return q_or_v.value

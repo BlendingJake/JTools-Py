@@ -1,4 +1,18 @@
-from .query import *
+from .antlr_jql import *
+from .jql import *
 
-__all__ = ["QueryBuilder", "Query", "Special", "Field", "ListValue", "DictValue", "SetValue", "Value",
-           "QueryParseError", 'MultiQueryBuilder', "MultiQuery", "RawInput"]
+__all__ = [
+    'JQLValue',
+    'JQLList',
+    'JQLSet',
+    'JQLDict',
+    'JQLField',
+    'JQLSpecial',
+    'JQLQuery',
+    'JQLMultiQuery',
+    'JQLRawInput',
+
+    'JQLQueryBuilder',
+    'JQLMultiQueryBuilder',
+    'JQLParseError'
+]
