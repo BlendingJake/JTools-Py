@@ -420,6 +420,38 @@ class TestGetter(unittest.TestCase):
             Query('latitude.$wrap("Lat=", @longitude.$prefix(" & Lon="))').single(small_data[0])
         )
 
+    def test_argument_types_with_inject(self):
+        self.assertEqual(3.14, Query("$inject(3.14)").single({}))
+        self.assertEqual(type(3.14), type(Query("$inject(3.14)").single({})))
+        self.assertEqual(3, Query("$inject(3)").single({}))
+        self.assertEqual(type(3), type(Query("$inject(3)").single({})))
+
+        self.assertEqual("test", Query("$inject('test')").single({}))
+        self.assertEqual("test", Query('$inject("test")').single({}))
+
+        self.assertTrue(Query('$inject( true )').single({}))
+        self.assertFalse(Query('$inject(false)').single({}))
+        self.assertIsNone(Query('$inject(null)').single({}))
+
+        self.assertEqual([1, 2], Query("$inject([ 1,  2 ])").single({}))
+        self.assertEqual([], Query("$inject([ ])").single({}))
+        self.assertEqual({1, 2}, Query("$inject({1, 2})").single({}))
+        self.assertEqual(set(), Query("$inject({  })").single({}))
+        self.assertEqual({1: 4, '5': False}, Query("$inject({ 1 : 4, '5' : false })").single({}))
+        self.assertEqual({}, Query("$inject({:})").single({}))
+
+        value = "missing"
+        self.assertEqual(value, Query("$inject(@value)").single({"value": value}))
+
+    def test_valid_names(self):
+        keys = ["_", "-", "range[0]", "23", "123asdf", "!not"]
+        value = [1, 2]
+        for key in keys:
+            self.assertEqual(value, Query(key, convert_ints=False).single({key: value}))
+
+    def test_empty_query(self):
+        self.assertIsNone(Query("").single({"bill": 54}))
+
 
 if __name__ == "__main__":
     unittest.main()

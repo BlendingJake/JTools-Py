@@ -7,7 +7,7 @@ from exectiming.exectiming import StaticTimer, Timer
 folder = Path(__file__).resolve().parent
 sys.path.append(str(folder.parent))
 
-from jtools import Filter, Key, Query
+from jtools import Filter, Key, Query, Formatter
 
 with open(folder / "data/10000.json", "r") as file:
     large_data = json.loads(file.read())
@@ -83,18 +83,31 @@ if __name__ == "__main__":
     #
     # timer.statistics()
 
-    q = Query("friends.0.name.$split(' ').$join(': ')")
-    print(q.single(large_data[0]))
-    timer.time_it(
-        q.many, large_data,
-        iterations_per_run=1, runs=10
-    )
+    # q = Query("friends.0.name.$split(' ').$join(': ')")
+    # print(q.single(large_data[0]))
+    # timer.time_it(
+    #     q.many, large_data,
+    #     iterations_per_run=1, runs=10
+    # )
+    #
+    # q = Query("registered.$strptime.$attr('year')")
+    # print(q.single(small_data[0]))
+    # timer.time_it(
+    #     q.many, small_data,
+    #     iterations_per_run=50, runs=10
+    # )
 
-    q = Query("registered.$strptime.$attr('year')")
-    print(q.single(small_data[0]))
+    item = {
+        "x1": 1,
+        "y1": 1,
+        "x2": 12,
+        "y2": 54
+    }
+    f = Formatter("Midpoint: [@x2.$subtract(@x1).$divide(2), @y2.$subtract(@y1).$divide(2)]")
+    print(f.single(item))
     timer.time_it(
-        q.many, small_data,
-        iterations_per_run=50, runs=10
+        f.single, item,
+        iterations_per_run=10000, runs=10
     )
 
     timer.statistics()

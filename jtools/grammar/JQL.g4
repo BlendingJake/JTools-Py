@@ -2,7 +2,7 @@ grammar JQL;
 
 jql_multi_query: (AT query | raw_text)* ;
 
-jql_query: query EOF ;
+jql_query: query? EOF ;
 
 query: query_part (DOT query_part)* ;
 
@@ -63,7 +63,7 @@ number
     ;
 
 name
-    : PRIMITIVE | DIGITS | ('-' | '_' | LETTERS | DIGITS)+
+    : (PRIMITIVE | DIGITS | '-' | '_' | LETTERS | LBRACKET | RBRACKET | LBRACE | RBRACE | SEMI | IDENTIFIER)+
     ;
 
 PRIMITIVE: 'true' | 'false' | 'null' ;
@@ -86,4 +86,5 @@ STRING
     ;
 SPACE: [ ];
 WS: SPACE | [\n\t\r\f];
+IDENTIFIER: ~('.' | '(');
 LAST: ~[\n];

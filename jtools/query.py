@@ -36,6 +36,11 @@ def wildcard(value: dict, nxt: Union[str, int], just_field=True):
     return out
 
 
+def print_return(value):
+    print(value)
+    return value
+
+
 class Query:
     """
     FieldGetter provides a powerful way to access that attributes of JSON-like data and perform
@@ -46,6 +51,8 @@ class Query:
         # general
         "length": lambda value: len(value),
         "lookup": lambda value, mp, fallback=None: mp.get(value, fallback),
+        "inject": lambda _, value: value,
+        "print": print_return,
 
         # dict
         "keys": lambda value: list(value.keys()),
@@ -171,32 +178,31 @@ class Query:
     def _query(self, value, query: JQLQuery):
         original = value
         for part in query.parts:
-            if value != self.fallback:
-                if isinstance(part, JQLField):
-                    if isinstance(value, list):
-                        if isinstance(part.field, int) and 0 <= part.field < len(value):
-                            value = value[part.field]
-                        else:
-                            value = self.fallback
+            if isinstance(part, JQLField):
+                if isinstance(value, list):
+                    if isinstance(part.field, int) and 0 <= part.field < len(value):
+                        value = value[part.field]
                     else:
-                        if part.field in value:
-                            value = value[part.field]
-                        else:
-                            value = self.fallback
-                elif isinstance(part, JQLSpecial):
-                    arguments = []
-                    arguments_safe = True
+                        value = self.fallback
+                else:
+                    if part.field in value:
+                        value = value[part.field]
+                    else:
+                        value = self.fallback
+            elif isinstance(part, JQLSpecial):
+                arguments = []
+                arguments_safe = True
 
-                    for arg in part.arguments:
-                        v = self._value(original, arg)
-                        if v != self.fallback:
-                            arguments.append(v)
-                        else:
-                            value = self.fallback
-                            arguments_safe = False
+                for arg in part.arguments:
+                    v = self._value(original, arg)
+                    if v != self.fallback:
+                        arguments.append(v)
+                    else:
+                        value = self.fallback
+                        arguments_safe = False
 
-                    if arguments_safe:
-                        value = self._specials[part.special](value, *arguments)
+                if arguments_safe:
+                    value = self._specials[part.special](value, *arguments)
 
         return value
 

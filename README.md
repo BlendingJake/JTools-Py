@@ -11,6 +11,15 @@
 ## Changelog
  * `1.1.0`
    * Rename `Getter` to `Query` to more accurately describe what the class does
+   * Migrate queries to use `JQL`
+     * The migration opens the door to nested queries in `Query`, allowing queries, prefixed with `@` to be used
+     as arguments to specials, or even as values in the supported argument data structures
+     * Special arguments are no longer parsed as `JSON`, allowing features like sets, query nesting, and support
+     for single and double quoted strings.
+     * Formatter no longer uses `{{}}` to surround queries. Instead, all queries must be prefixed with `@`, so
+     `"{{name}} {{age}}"` -> `"@name @age"`. `@@` must be used to get a literal `@` in a formatted string:
+     `"bob@@gmail.com"` -> `"bob@gmail.com"`
+     * Formatter got about a 2x performance boost
    * Added `$wrap(prefix, suffix)` to combine `$prefix` and `$suffix`
    * Added `$remove_nulls`
    * Added `$lookup(map, fallback=None)`
@@ -59,6 +68,7 @@
 
 ## Glossary
  * [`Installation`](#install)
+ * [`JQL`](#jql)
  * [`Query`](#query)
    * [`Specials`](#specials)
  * [`Formatter`](#formatter)
@@ -74,44 +84,76 @@
 from jtools import Query, Filter, Key, Condition, Formatter
 ```
 
+## <a name="jql">`JQL`</a>
+>`JQL` or the `JSON Query Language` is a custom built query language for `JTools` which supports powerful features
+>like nesting, complex data types, and value transformers. The basic format of the language is: 
+```
+(<field> | $<special>) (. (<field> | $<special>))*
+EX: 'data', 'data.timestamp', 'data.$split', '$split.0'
+```
+#### field
+A field is just a value that can be used as an index, like a string or integer key for a map/dict or an integer for an
+array. By default, all fields are treated as strings, but that behavior can be customized in each of the classes provided
+so that integers can be using properly. Fields cannot contain ' ', '.', or '('. `$index(<field>)` can be used
+to access fields with those prohibited characters. 
+
+#### $special
+A special is a function that is applied the value that has been queried so far. There is a complete list of specials
+[here](#specials). These specials can be passed arguments, which is one of the most powerful features
+of `JQL`. The syntax is similar to most programming languages: `$<special>(<value>(, <value>)*)`. Just to note, `$<special>()`
+is valid, as is `$<special>`. Many of the specials don't require any arguments, or have default values.
+
+##### value
+An argument can be:
+```
+[] or [<value>(, <value>)*] - List
+{} or {<value>(, <value>)*} - Set
+{:} or {<key>: <value>(, <key>: <value>)*} - Map/Dict/Object
+Integer
+Float
+String w/ '' or ""
+true
+false
+null
+@<query> - Yep! Nested queries!
+
+<key>:
+    @<query>
+    String
+    Integer/Float
+    True
+    False
+    None/Null
+``` 
+As denoted, values and queries can be nested, so `[[1, 2], ["bob"], {"Ann", 'Ralph'}, {'key': 4, 23: 5}]`
+is valid. Additionally, the support for nesting queries is extremely powerful and allows for queries like:
+`item.tag.$lookup(@table.colors)`, which, for `{"item": {"tag": "product"}, "table": {"colors": {"product": "red"}}}`
+results in `"red"`
+
 ## <a name="query">Query</a>
 >`Query` on the surface is very simple: you give it a field query string (or several)
->and it returns the value (or values) at that path(s) from a given an item or list of items. 
+>and it returns the value (or values) that result for the query(ies). 
 >Example: `Query("name").single({"name": "John"})` will return `"John"`.
->However, there are many more cool features, like supporting dot-notation,
->having the ability to transform values with specials, and even the ability 
->to drill down into lists. Below is a fuller list of the features.
+>However, the power and flexibility of `JQL` allows for some very useful queries!
 
  * `.single(item)` can be used to get field(s) from a single item, or 
  `.many(items)` can be used to get field(s) from a list of items
  
  * Multiple fields can be retrieved at once by passing a list of query strings, like
  `Query(["name", "age"])`. Resulting values from `.single` and `.many` will be
- lists of corresponding length.
+ lists of the corresponding length.
  
- * Dot-notation is supported and can be used to access nested values. For
- example, `meta.id` can be used to get the `id` field from the item
- `{"meta": {"id": 1}}`, resulting in the value of `1`. 
+ * If a field does not exist, then a fallback value will result. By default, this is `None`, but the value can
+ be changed by setting `Query(..., fallback=None)`. 
  
- * Integer paths can be used to index lists as long as `Query(..., convert_ints=True)`,
+ * Lists can be indexed as long as `Query(..., convert_ints=True)`,
  which is set to `True` by default. This allows paths like `friends.0`. However, `convert_ints=False`
  should be used if trying to access fields whose keys are strings containing digits, like
- `{"index": {"0": ...}}`
+ `{"index": {"0": ...}}`. If it is unacceptable for all digit containing strings to be converted to
+ integers, then the `.$index` special can be used.
+ `Query("item.0.$index(0)").single({"item": {"0": ["tag"])}) -> 'tag'`
  
- * Specials can be can be used to transform the queried value, and multiple
- specials can be used back to back, with the output of one being used in the next. 
- Specials are included in the field path and prefixed with `$`. For example, 
- if you have `{"long_number": 3.1415926}`, you can use `long_number.$round`
- to round it to `2` decimal places, returning `3.14`. 
- 
- * Arguments can be passed into these specials! For example, if you have
- `{"email": "john_doe@gmail.com"}` and you want to get just the 
- email provider, then `email.$split("@").$index(-1)` can be used, which will
- return `gmail.com`. Equally, `email.$split("@").1` could be used. 
- 
- * Arguments can be anything that can be represented in JSON. 
- **Note: JSON requires strings to be double-quoted, so 
- `email.$split('@')` would not work and `email.$split("@")` would have to be used instead.**
+ * Fields can be indexed after specials, so `$split.0` is completely valid
  
  * You don't have to use `()` at the end of a special if there aren't any 
  arguments, or the default arguments are acceptable.
@@ -124,23 +166,25 @@ from jtools import Query, Filter, Key, Condition, Formatter
 General
   * `$length -> int`
   * `$lookup(map: dict, fallback=None) -> any`: Lookup the current value in the provided map/dict 
+  * `$inject(value: any) -> any`: Inject a value into the query
+  * `$print -> any`: Print the current query value before continuing to pass that value along
   
 Maps
   * `$keys -> list`
   * `$values -> list`
   * `$items -> List[tuple]`
-  * `$wildcard(next, just_value=True) -> List[any]`: On a given map or list, go through all values and see if `next` is
-  a defined field. If it is, then return just the value of `next` on that item, if `just_value=True`, or the entire 
+  * `$wildcard(next, just_value=true) -> List[any]`: On a given map or list, go through all values and see if `next` is
+  a defined field. If it is, then return just the value of `next` on that item, if `just_value=true`, or the entire 
   item otherwise. This special allows a nested field to be extracted across multiple items where it it present. 
   For example: 
 ```python
 data = {
     "a": {"tag": "run"},
-    "b": {"tag": "todo", "other": "task"},
+    "b": {"tag": "to-do", "other": "task"},
     "meta": None
 }
-Query('$wildcard("tag")').single(data)  # => ["run", "todo"]
-Query('$wildcard("tag", False)').single(data) # => [{"tag": "run"}, {"tag": "todo", "other": "task"}]
+Query('$wildcard("tag")').single(data)  # => ["run", "to-do"]
+Query('$wildcard("tag", false)').single(data) # => [{"tag": "run"}, {"tag": "to-do", "other": "task"}]
 ```
   
 Type Conversions
@@ -150,8 +194,8 @@ Type Conversions
   * `$int -> int`
   * `$not -> bool`: Returns `!value`
   * `$fallback(fallback) -> value or fallback`: If the value is None, then it will be replaced with `fallback`.
-  * `$ternary(if_true, if_false, strict=False) -> any`: Return `if_true` if the value is `truish`, otherwise,
-  return `if_false`. Pass `True` for `strict` if the value must be `True` and not just `truish`.
+  * `$ternary(if_true, if_false, strict=false) -> any`: Return `if_true` if the value is `truish`, otherwise,
+  return `if_false`. Pass `true` for `strict` if the value must be `True` and not just `truish`.
   
 Datetime 
   * `$parse_timestamp -> datetime`: Take a Unix timestamp in seconds and return a corresponding datetime object
@@ -201,34 +245,14 @@ Attributes
 > `Formatter` allows fields to be taken from an object and then formatted
 >into a string. The basic usage is `Formatter(<spec>).single(<item>)`, although
 >`.many` exists as well.
->Fields to be replaced should be wrapped in `{{}}` and any valid
->field query string for `Query` can be used. For example, 
->`Formatter('Name: {{name}}').format({"name": "John Smith"})` results in
->`Name: John Smith`. Below are some specific details.
-
- * The field specifications from `Query` are valid here, so the above example
- could instead be `'First Name: {{name.$split(" ").0}}'` to get `First Name: John`
- instead.
- 
- * **Field paths can be nested!!!!** - this allows values from one field to be 
- passed as the arguments to another, allowing complex queries. For example,
- `Formatter("Balance: ${{  balance.$subtract({{  pending_charges  }})  }}").format({"balance": 1000, "pending_charges": 250})`
- which results in `Balance: $750`.
- 
- * Whitespace is allowed inside of the curly braces before and after the field query string. 
- `{{   a  }}` is just as valid as `{{a}}`. 
- 
- * **IMPORTANT:** Nested fields that return strings which are then used as arguments 
-must be manually double-quoted. For example, lets say we want to replace the domain `gmail`
-with `<domain>` in `item = {"email": "john_doe@gmail.com"}`. We want to determine the 
-current domain, which we can do with `email.$split("@").1.$split(".").0`, and then
-we want to pass that as an argument into `$replace`. To do so, we need to surround the nested
-field with double-quotes so it will be properly recognized as an argument in the `replace` special.
-`Formatter('Generic Email: {{  email.$replace("{{  email.$split("@").1.$split(".").0  }}", "<domain>")  }}').format(item)"`
-
-* **IMPORTANT:** Pay attention when using `f-strings` and `Formatter` as `f"{{field}}"` becomes `"{field}"`. If you
-have to use an `f-string`, then you'll need to escape the braces with another brace, so `f"{{{{field}}}}"` becomes
-`"{{field}}"`.
+>Any queries in a format string should be prefixed with `@` and any valid `JQL` query can be used. For example, 
+>`Formatter('Name: @name}').format({"name": "John Smith"})` results in
+>`Name: John Smith`.
+>The differences between `Query` and `Formatter` are:
+ * `Query` can return a value of any type, `Formatter` just returns strings
+ * `Formatter` supports multiple queries, end-to-end, `Query` does not
+ * All queries must be prefixed with `@` with `Formatter`, not just when used as an argument like with `Query`
+ * Both support all the features of `JQL`
  
 Example (flattening operations):
 ```python
@@ -239,7 +263,8 @@ errors = {
     }
 }
 
-Formatter('{errors.$items.$map("join", ": \\n\\t").$join("\\n")}').single(errors)
+Formatter('Errors: \n@errors.$items.$map("join", ": \\n\\t").$join("\\n")').single(errors)
+# Errors:
 # Process Error: 
 #   Could not communicate with the subprocess
 # Connection Error: 
@@ -259,18 +284,18 @@ item = {
 }
 
 Formatter(
-    "Midpoint: [{{x2.$subtract({{x1}}).$divide(2)}}, {y2.$subtract({{y1}}).$divide(2)}}]"
+    "Midpoint: [@x2.$subtract(@x1).$divide(2), @y2.$subtract(@y1).$divide(2)]"
 )
 # Midpoint: [5.5, 26.5]
 ```
 >Additionally, the speed of formatting is very quick. The above statement 
->can be preformed 10,000 times in around 0.75 seconds.
+>can be preformed 10,000 times in around 0.36 seconds.
 
 ## <a name="filter">Filter</a>
->`Filter` takes the field querying capabilities of `Query` and combines it with 
+>`Filter` takes the power of `JQL` and combines it with 
 >filtering conditions to allow lists of items to be filtered down to just those of 
 >interest. The basic usage is: `Filter(<filters>).many(<list of items>)`, although
->`.single` can also be used to get a boolean answer of whether the item matches the filter or not.
+>`.single` can also be used to get a boolean answer of whether an item matches the filter or not.
 >The filters can be manually built, or the `Key` and `Condition` classes can 
 >be used to simplify your code.
 
@@ -289,7 +314,7 @@ Filter Schema:
 
     ...
 ]
-<field>: anything Query accepts
+<field>: any valid `JQL` query
 <op>: See list below
 <value>: Anything that makes sense for the operator
 ``` 
