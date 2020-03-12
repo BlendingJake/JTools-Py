@@ -153,6 +153,8 @@ class Key:
 
 
 class Filter:
+    MISSING = object()
+
     _filters = {
         ">": lambda field, value: field > value,
         "<": lambda field, value: field < value,
@@ -174,20 +176,23 @@ class Filter:
         "startswith": lambda field, value: field.startswith(value),
         "endswith": lambda field, value: field.endswith(value),
 
-        "present": lambda field, _: field is not None,
-        "!present": lambda field, _: field is None,
+        "present": lambda field, _: field is not Filter.MISSING,
+        "!present": lambda field, _: field is Filter.MISSING,
     }
 
     def __init__(self, filters: Union[Condition, List[dict]], convert_ints: bool = True,
-                 empty_filters_response: bool = True):
+                 empty_filters_response: bool = True, missing_field_response: bool = False):
         """
         Prepare a filter object from a list of filters, or from a condition object
         :param filters: The filters
         :param convert_ints: Whether to convert anything that can be converted to int, to an int
         :param empty_filters_response: What is returned if there are no filters. Makes the difference between
             returning all items for empty filters, or returning none.
+        :param missing_field_response: What is returned for a filter if the field was not present.
         """
         self.empty_filters_response = empty_filters_response
+        self.missing_field_response = missing_field_response
+
         if isinstance(filters, Condition):
             self.filters = filters.filters()
         else:
@@ -207,7 +212,7 @@ class Filter:
             elif "not" in f:
                 out.update(self._preprocess(f["not"], convert_ints))
             elif f["field"] not in out:
-                out[f["field"]] = Query(f["field"], convert_ints=convert_ints)
+                out[f["field"]] = Query(f["field"], fallback=self.MISSING, convert_ints=convert_ints)
 
         return out
 
@@ -224,7 +229,11 @@ class Filter:
             elif "not" in f:
                 c = not self._filter(item, f["not"])
             else:
-                c = self._filters[f["operator"]](self.queries[f["field"]].single(item), f["value"])
+                query_result = self.queries[f["field"]].single(item)
+                if query_result is self.MISSING and f["operator"] not in ("present", "!present"):
+                    c = self.missing_field_response
+                else:
+                    c = self._filters[f["operator"]](query_result, f["value"])
 
             if overall is None:
                 overall = c

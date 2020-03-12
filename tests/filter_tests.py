@@ -16,10 +16,33 @@ with open(folder / "data/20.json", "r") as file:
 
 
 class TestFilter(unittest.TestCase):
+    def test_missing_fields(self):
+        self.assertFalse(Filter(Key("missing") == "John", missing_field_response=False).single(small_data[0]))
+        self.assertTrue(Filter(Key("missing") == "John", missing_field_response=True).single(small_data[0]))
+
+        data = [
+            {"a": 5},
+            {"b": 4},
+            {"a": 4},
+            {"a": 2}
+        ]
+        self.assertEqual(
+            2,
+            len(Filter(Key("a") >= 4).many(data))
+        )
+
+        self.assertEqual(
+            3,
+            len(Filter(Key("a") >= 4, missing_field_response=True).many(data))
+        )
+
     def test_nested(self):
         items = Filter(Key("friends.0.name") == "Webster Green").many(small_data)
+        items1 = Filter(Key("friends.0.name").operator("==").value("Webster Green")).many(small_data)
         self.assertEqual(1, len(items))
+        self.assertEqual(1, len(items1))
         self.assertEqual("5e2797c05aa0585816ce8b8c", items[0]["_id"])
+        self.assertEqual("5e2797c05aa0585816ce8b8c", items1[0]["_id"])
 
     def test_eye_color(self):
         items = Filter(Key("eyeColor").eq("brown")).many(small_data)
@@ -185,8 +208,15 @@ class TestFilter(unittest.TestCase):
         self.assertTrue(
             Filter(Key("name").present()).single(small_data[0])
         )
+        self.assertFalse(
+            Filter(Key("name2").present()).single(small_data[0])
+        )
+
         self.assertTrue(
             Filter(Key("not_present").not_present()).single(small_data[0])
+        )
+        self.assertFalse(
+            Filter(Key("name").not_present()).single(small_data[0])
         )
 
     def test_equality(self):

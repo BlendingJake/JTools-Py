@@ -1,5 +1,9 @@
 [run]
 branch = True
+include =
+    jtools/filter.py
+    jtools/formatter.py
+    jtools/query.py
 
 [report]
 exclude_lines =

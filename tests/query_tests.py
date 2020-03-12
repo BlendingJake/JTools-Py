@@ -354,6 +354,7 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(sum(data["a"]), Query("a.$sum").single(data))
         self.assertEqual(", ".join(str(i) for i in data["a"]), Query("a.$join").single(data))
         self.assertEqual(data["a"][2], Query("a.$index(2)").single(data))
+        self.assertEqual("nope", Query("a.$index(5, 'nope')").single(data))
         self.assertEqual(data["a"][1:], Query("a.$range(1)").single(data))
         self.assertEqual(data["a"][1:-1], Query("a.$range(1, -1)").single(data))
         self.assertEqual([d for d in data["b"] if d is not None], Query("b.$remove_nulls").single(data))
@@ -451,6 +452,13 @@ class TestGetter(unittest.TestCase):
 
     def test_empty_query(self):
         self.assertIsNone(Query("").single({"bill": 54}))
+
+    def test_missing_fields(self):
+        self.assertEqual(None, Query("a").single({"b": [1, 2]}))
+        self.assertEqual(None, Query("b.3").single({"b": [1, 2]}))
+        self.assertEqual('MISSING', Query("b.3", fallback="MISSING").single({"b": [1, 2]}))
+        self.assertEqual(2, Query("b.2.$fallback(4).$divide(2)").single({"b": [1, 2]}))
+        self.assertEqual(3, Query("b.1.$fallback(4).$divide(2)").single({"b": [1, 6]}))
 
 
 if __name__ == "__main__":

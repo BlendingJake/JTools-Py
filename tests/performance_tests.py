@@ -18,39 +18,60 @@ with open(folder / "data/20.json", "r") as file:
 
 class PerformanceTesting(unittest.TestCase):
     def test_query_reuse(self):
-        runs = 15
+        runs = 100
 
-        recreate_time = StaticTimer.time_it(
-            lambda: [Query('email.$split("@").1.$split(".").0').single(item) for item in large_data],
+        value1, recreate_time = StaticTimer.time_it(
+            lambda: Query('email.$split("@").1.$split(".").0').single(large_data[0]),
             runs=runs, iterations_per_run=1, display=False, log_arguments=False
-        )[1]
+        )
 
         getter = Query('email.$split("@").1.$split(".").0')
-        reuse_time = StaticTimer.time_it(
-            lambda: [getter.single(item) for item in large_data],
+        value2, reuse_time = StaticTimer.time_it(
+            getter.single, large_data[0],
             runs=runs, iterations_per_run=1, display=False, log_arguments=False
-        )[1]
+        )
 
         print(recreate_time / reuse_time, "x faster to reuse Query then recreate")
+        self.assertEqual(value1, value2)
         self.assertGreater(recreate_time / reuse_time, 5)
 
     def test_filter_reuse(self):
-        runs = 15
+        runs = 100
 
-        recreate_time = StaticTimer.time_it(
-            lambda: [
-                Filter(Key("gender").eq("male").and_(Key("friends.$length").gte(3))).single(item) for item in large_data
-            ],
+        value1, recreate_time = StaticTimer.time_it(
+            lambda: Filter(Key("gender").eq("male").and_(Key("friends.$length").gte(3))).single(large_data[0]),
             runs=runs, iterations_per_run=1, display=False, log_arguments=False
-        )[1]
+        )
 
         f = Filter(Key("gender").eq("male").and_(Key("friends.$length").gte(3)))
-        reuse_time = StaticTimer.time_it(
-            lambda: [f.single(item) for item in large_data],
+        value2, reuse_time = StaticTimer.time_it(
+            f.single, large_data[0],
             runs=runs, iterations_per_run=1, display=False, log_arguments=False
-        )[1]
+        )
 
         print(recreate_time / reuse_time, "x faster to reuse Filter then recreate")
+        self.assertEqual(value1, value2)
+        self.assertGreater(recreate_time / reuse_time, 5)
+
+    def test_formatter_reuse(self):
+        runs = 100
+
+        value1, recreate_time = StaticTimer.time_it(
+            lambda: Formatter(
+                "Age: @age, Domain: @email.$split('@').1, Friends: @friends.$map('index', 'name').$join"
+            ).single(large_data[0]),
+            runs=runs, iterations_per_run=1, display=False, log_arguments=False
+        )
+
+        f = Formatter("Age: @age, Domain: @email.$split('@').1, Friends: @friends.$map('index', 'name').$join")
+        value2, reuse_time = StaticTimer.time_it(
+            f.single, large_data[0],
+            runs=runs, iterations_per_run=1, display=False, log_arguments=False
+        )
+
+        print(f.single(large_data[0]))
+        print(recreate_time / reuse_time, "x faster to reuse Formatter then recreate")
+        self.assertEqual(value1, value2)
         self.assertGreater(recreate_time / reuse_time, 5)
 
 

@@ -33,9 +33,7 @@ value
     | object_value
     | number
     | STRING
-    | 'true'
-    | 'false'
-    | 'null'
+    | PRIMITIVE
     ;
 
 list_value

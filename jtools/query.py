@@ -41,6 +41,13 @@ def print_return(value):
     return value
 
 
+def index(value, i, fallback=None):
+    try:
+        return value[i]
+    except IndexError:
+        return fallback
+
+
 class Query:
     """
     FieldGetter provides a powerful way to access that attributes of JSON-like data and perform
@@ -101,7 +108,7 @@ class Query:
         # list
         "sum": lambda value: sum(value),
         "join": lambda value, sep=", ": sep.join(str(i) for i in value),
-        "index": lambda value, index: value[index],
+        "index": lambda value, i, fallback=None: index(value, i, fallback),
         "range": lambda value, start, end=None: value[start: end if end is not None else len(value)],
         "remove_nulls": lambda value: [v for v in value if v is not None],
 
@@ -113,17 +120,17 @@ class Query:
     _specials["map"] = lambda value, special, *args: [Query._specials[special](v, *args) for v in value]
 
     def __init__(self,
-                 field: Union[str, List[str], JQLQuery, List[JQLQuery]], convert_ints: bool = True,
+                 query: Union[str, List[str], JQLQuery, List[JQLQuery]], convert_ints: bool = True,
                  fallback: any = None):
         """
         Create an object for a specific field query string or strings.
-        :param field: The field query string (or strings) or the query parts.
+        :param query: The field query string (or strings) or the query parts.
         :param convert_ints: Whether to convert <field> values that are digits to be ints to allow array indexing, or
             whether to leave them as strings.
         :param fallback: A fallback value that will be used a field cannot be found on a given object
         """
-        self.multiple: bool = not (isinstance(field, str) or isinstance(field, JQLQuery))
-        self.fields: Union[List[str], List[JQLQuery]] = field if self.multiple else [field]
+        self.multiple: bool = not (isinstance(query, str) or isinstance(query, JQLQuery))
+        self.fields: Union[List[str], List[JQLQuery]] = query if self.multiple else [query]
         self.fallback = fallback
         self.convert_ints = convert_ints
 
@@ -142,10 +149,6 @@ class Query:
 
     def __repr__(self):
         return f"Getter: {self.parts}"
-
-    @classmethod
-    def full_regex(cls):
-        return ""
 
     @classmethod
     def register_special(cls, name: str, func: Callable) -> bool:
@@ -179,15 +182,10 @@ class Query:
         original = value
         for part in query.parts:
             if isinstance(part, JQLField):
-                if isinstance(value, list):
-                    if isinstance(part.field, int) and 0 <= part.field < len(value):
+                if value != self.fallback:
+                    try:
                         value = value[part.field]
-                    else:
-                        value = self.fallback
-                else:
-                    if part.field in value:
-                        value = value[part.field]
-                    else:
+                    except Exception:
                         value = self.fallback
             elif isinstance(part, JQLSpecial):
                 arguments = []
