@@ -33,7 +33,7 @@ class TestFormatter(unittest.TestCase):
 
     def test_format_missing(self):
         self.assertEqual(
-            None,
+            "<missing>",
             Formatter("@missing").single({})
         )
 
@@ -45,7 +45,7 @@ class TestFormatter(unittest.TestCase):
 
     def test_format_missing_nested_field(self):
         self.assertEqual(
-            None,
+            "<missing>",
             Formatter("@a.$index(@index)").single({"a": [1, 2]})
         )
 
@@ -83,6 +83,26 @@ class TestFormatter(unittest.TestCase):
         self.assertEqual(
             f"<redacted>@{small_data[0]['email'].split('@')[1]}",
             Formatter("<redacted>@@@email.$split('@').1").single(small_data[0])
+        )
+
+    def test_surrounded_query(self):
+        self.assertEqual(
+            f'<p class="lead">{small_data[0]["email"]}</p>',
+            Formatter('<p class="lead">@email</p>').single(small_data[0])
+        )
+
+    def test_one_missing_out_of_several(self):
+        self.assertEqual(
+            f"Name: {small_data[0]['name']}, Missing: <missing>",
+            Formatter("Name: @name, Missing: @missing").single(small_data[0])
+        )
+
+    def test_special_surrounded(self):
+        x = 5
+        y = 5.6
+        self.assertEqual(
+            f"{x}+{y}={x + y}={y + x}",
+            Formatter("@x+@y=@x.$add(@y)=@y.$add(@x)").single({"x": x, "y": y})
         )
 
 

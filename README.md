@@ -16,26 +16,9 @@
 >goal of making it a seamless experience to go from querying/filtering/formatting in JavaScript to Python and back.
 
 ## Recent Changes
- * `1.1.0`
-   * Rename `Getter` to `Query` to more accurately describe what the class does
-   * Migrate queries to use `JQL`
-     * The migration opens the door to nested queries in `Query`, allowing queries, prefixed with `@` to be used
-     as arguments to specials, or even as values in the supported argument data structures
-     * Special arguments are no longer parsed as `JSON`, allowing features like sets, query nesting, and support
-     for single and double quoted strings.
-     * Formatter no longer uses `{{}}` to surround queries. Instead, all queries must be prefixed with `@`, so
-     `"{{name}} {{age}}"` -> `"@name @age"`. `@@` must be used to get a literal `@` in a formatted string:
-     `"bob@@gmail.com"` -> `"bob@gmail.com"`
-     * Formatter got about a 2x performance boost
-   * Added `$wrap(prefix, suffix)` to combine `$prefix` and `$suffix`
-   * Added `$remove_nulls`
-   * Added `$lookup(map, fallback=None)`
-   * Added `$wildcard(next, just_value=True)`, which allows level of nesting to be "skipped", such that a list
-   of sub-values where `next` is present
-   * Added a `fallback` argument to `$index`
-   * Added `$print` to display the current value in the query
-   * Added `$inject` to allow any valid argument value to be injected into the query to be
-  accessed and transformed by subsequent fields and specials
+ * `1.1.2`
+    * Minor changes to documentation
+    * Mostly just to get version back on track with repository 
 
 ## Glossary
  * [`Installation`](#install)
@@ -65,12 +48,13 @@ from jtools import Query, Filter, Key, Condition, Formatter
 EX: 'data', 'data.timestamp', 'data.$split', '$split.0'
 ```
 #### field
-A field is just a value that can be used as an index, like a string or integer key for a map/dict or an integer for an
+A field is just a value that can be used as an index, like a string or integer key for a map/dict, or an integer for an
 array. By default, any field that can be treated as an integer will be. However, this assumes that any field containing 
 only digits was intended to be an integer index, which isn't always the desired behavior. To stop digit-only 
 strings from becoming integers, set `convert_ints=False` when creating the query/filter/formatter.
-Fields cannot contain ` `, `.`, or ` ( `. Instead, `$index("<field>")` can be used
-to access fields with those prohibited characters. 
+
+Fields can only contain the following characters: `[-a-zA-Z0-9_]`. However, fields with prohibited characters can still
+be indexed by using the `$index` special, so to index `range[0]` use `$index("range[0]")`.
 
 #### $special
 A special is a function that is applied to the value that has been queried so far. There is a complete list of specials
@@ -362,14 +346,15 @@ Key('creation_time.$parse_timestamp.$attr("year")').lt(2005).or_(
 ```
 
 ## <a name="formatter">Formatter</a>
-> `Formatter` allows fields to be queried from an object and then formatted
->into a string. Any queries in a format string should be prefixed with `@` and any valid `JQL` query can be used. For example, 
+> `Formatter` allows fields to be queried from an object and then formatted into a string. 
+>Any JQL queries in a format string should be prefixed with `@`. For example, 
 >`Formatter('Name: @name}').single({"name": "John Smith"})` results in
 >`Name: John Smith`.
 
-### `Formatter(spec, fallback=None, convert_ints=True)`
+### `Formatter(spec, fallback="<missing>", convert_ints=True)`
  * `spec`: `str` The format string
- * `fallback`: `any` The value that will be returned if the query fails
+ * `fallback`: `str` The value that will be used in the formatted string if a query could not be performed.
+ For example, if the field `missing` does exist, then the query `"Age: @missing"` will result in `"Age: <missing>"`
  * `convert_ints`: `bool` Whether digit-only fields get treated as integers or strings
  
 #### `.single(item)`
@@ -384,8 +369,8 @@ Key('creation_time.$parse_timestamp.$attr("year")').lt(2005).or_(
  * `Formatter` supports multiple queries, end-to-end, `Query` does not
  * All queries must be prefixed with `@` with `Formatter`, not just when used as an argument like with `Query`
  * Both support all the features of `JQL`
- * `Query` actually can do everything `Formatter` does by using `$prefix`, `$suffix`, and `$string`. For example,
- `'@name @age'` -> `'name.$suffix(" ").$suffix(@age)'`. However, the latter is much longer than the former.
+ * `Query` actually can theoretically do everything `Formatter` does by using `$prefix`, `$suffix`, and `$string`. 
+ For example, `'@name @age'` -> `'name.$suffix(" ").$suffix(@age)'`. However, the latter is much longer than the former.
  
 Example (flattening operations):
 ```python
@@ -449,6 +434,37 @@ for item in items:
  * reusing `Formatter` can improve performance by 377x.
 
 ## <a name="changelog">Changelog</a>  
+ * `1.1.1`
+   * Add `antlr4-python3` requirement to `setup.py` so that installation will get the needed dependencies
+   * Change `JQL` so that field and special names must only contain `[-a-zA-Z0-9_]`. `$index` can be used to get fields
+   with prohibited characters. The change was to support more formatting use-cases, like `Age: @age, DOB: @dob`, which 
+   previously would have failed because the `,` would have been considered part of the field name.
+   * Change `Formatter` so that `fallback` is just a string that is substituted for invalid queries, instead of being
+   the entire return value. Previously, `"Age: @missing"` would result in `None`, not it results in `"Age: <missing>"`.
+   This change allows for better debugging as it becomes clear exactly which queries are failing.
+   * Add function docstrings
+   
+ * `1.1.0`
+   * Rename `Getter` to `Query` to more accurately describe what the class does
+   * Migrate queries to use `JQL`
+     * The migration opens the door to nested queries in `Query`, allowing queries, prefixed with `@` to be used
+     as arguments to specials, or even as values in the supported argument data structures
+     * Special arguments are no longer parsed as `JSON`, allowing features like sets, query nesting, and support
+     for single and double quoted strings.
+     * Formatter no longer uses `{{}}` to surround queries. Instead, all queries must be prefixed with `@`, so
+     `"{{name}} {{age}}"` -> `"@name @age"`. `@@` must be used to get a literal `@` in a formatted string:
+     `"bob@@gmail.com"` -> `"bob@gmail.com"`
+     * Formatter got about a 2x performance boost
+   * Added `$wrap(prefix, suffix)` to combine `$prefix` and `$suffix`
+   * Added `$remove_nulls`
+   * Added `$lookup(map, fallback=None)`
+   * Added `$wildcard(next, just_value=True)`, which allows level of nesting to be "skipped", such that a list
+   of sub-values where `next` is present
+   * Added a `fallback` argument to `$index`
+   * Added `$print` to display the current value in the query
+   * Added `$inject` to allow any valid argument value to be injected into the query to be
+  accessed and transformed by subsequent fields and specials
+  
  * `1.0.6`
    * Add `===` and `!==` to match the strict equality checking needed in the JS version. 
    The methods `seq` and `sne` have been added to `Key` to correspond with the new filters.

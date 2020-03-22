@@ -8,7 +8,7 @@ from dateutil.parser import parse
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
+logger.setLevel(environ.get("JTOOLS_LOGGING_LEVEL", "WARNING"))
 
 __all__ = ["Query"]
 
@@ -123,11 +123,10 @@ class Query:
                  query: Union[str, List[str], JQLQuery, List[JQLQuery]], convert_ints: bool = True,
                  fallback: any = None):
         """
-        Create an object for a specific field query string or strings.
-        :param query: The field query string (or strings) or the query parts.
-        :param convert_ints: Whether to convert <field> values that are digits to be ints to allow array indexing, or
-            whether to leave them as strings.
-        :param fallback: A fallback value that will be used a field cannot be found on a given object
+        Create a query object from a JQL query string, or list of JQL query strings.
+        :param query: The JQL query string(s)
+        :param convert_ints: Whether to treat digit-only field values as integers or strings
+        :param fallback: A fallback value that will be used if a field cannot be found
         """
         self.multiple: bool = not (isinstance(query, str) or isinstance(query, JQLQuery))
         self.fields: Union[List[str], List[JQLQuery]] = query if self.multiple else [query]
@@ -149,34 +148,6 @@ class Query:
 
     def __repr__(self):
         return f"Getter: {self.parts}"
-
-    @classmethod
-    def register_special(cls, name: str, func: Callable) -> bool:
-        """
-        Register a new special that can be accessed with $<name>.
-        The function should take at least one argument, <value>.
-        :param name: The name of the special
-        :param func: The function that will be applied to the value
-        """
-        if name not in cls._specials:
-            cls._specials[name] = func
-            return True
-        else:
-            logger.warning(f"{name} is already registered as a special value")
-            return False
-
-    def single(self, item: Union[list, dict]) -> Union[Any, List[Any]]:
-        """
-        Get the field from the specified item
-        """
-        values = []
-        for query in self.parts:
-            if query is not None:
-                values.append(self._query(item, query))
-            else:
-                values.append(self.fallback)
-
-        return values if self.multiple else values[0]
 
     def _query(self, value, query: JQLQuery):
         original = value
@@ -216,8 +187,44 @@ class Query:
         else:
             return q_or_v.value
 
+    def single(self, item: Union[list, dict]) -> Union[Any, List[Any]]:
+        """
+        Query the item
+        :param item: The item to query
+        :return: A value, or list of values, depending on whether one or multiple queries are present
+        """
+        values = []
+        for query in self.parts:
+            if query is not None:
+                values.append(self._query(item, query))
+            else:
+                values.append(self.fallback)
+
+        return values if self.multiple else values[0]
+
     def many(self, items: List[Union[list, dict]]) -> Union[List[Any], List[List[Any]]]:
+        """
+        Query the items
+        :param items: The items to query
+        :return: A list of values or a list of lists of values, depending on whether one or multiple queries are present
+        """
         return [self.single(item) for item in items]
+
+    @classmethod
+    def register_special(cls, name: str, func: Callable) -> bool:
+        """
+        Register a new special that can be accessed with $<name>.
+        The function should take at least one argument, which will be the current value in query.
+        :param name: The name of the special - must only contain these characters: [-a-zA-Z0-9_]
+        :param func: The function that will be applied to the value
+        :return Whether or not the special could be registered
+        """
+        if name not in cls._specials:
+            cls._specials[name] = func
+            return True
+        else:
+            logger.warning(f"{name} is already registered as a special value")
+            return False
 
 
 if __name__ == "__main__":

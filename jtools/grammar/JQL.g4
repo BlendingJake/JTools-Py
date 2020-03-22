@@ -61,7 +61,7 @@ number
     ;
 
 name
-    : (PRIMITIVE | DIGITS | '-' | '_' | LETTERS | LBRACKET | RBRACKET | LBRACE | RBRACE | SEMI | IDENTIFIER)+
+    : (PRIMITIVE | DIGITS | '-' | '_' | LETTERS )+
     ;
 
 PRIMITIVE: 'true' | 'false' | 'null' ;
@@ -84,5 +84,4 @@ STRING
     ;
 SPACE: [ ];
 WS: SPACE | [\n\t\r\f];
-IDENTIFIER: ~('.' | '(');
 LAST: ~[\n];

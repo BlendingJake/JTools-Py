@@ -5,7 +5,7 @@ from os import environ
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel(environ.get("LOGGING_LEVEL", "INFO"))
+logger.setLevel(environ.get("JTOOLS_LOGGING_LEVEL", "WARNING"))
 
 __all__ = ["Condition", "Key", "Filter"]
 
@@ -185,7 +185,7 @@ class Filter:
         """
         Prepare a filter object from a list of filters, or from a condition object
         :param filters: The filters
-        :param convert_ints: Whether to convert anything that can be converted to int, to an int
+        :param convert_ints: Whether to convert digit-only strings to integers or not
         :param empty_filters_response: What is returned if there are no filters. Makes the difference between
             returning all items for empty filters, or returning none.
         :param missing_field_response: What is returned for a filter if the field was not present.
@@ -250,16 +250,23 @@ class Filter:
 
         return self.empty_filters_response if overall is None else overall
 
-    def many(self, items: List[Union[dict, list]]) -> List[Union[dict, list]]:
+    def single(self, item) -> bool:
         """
-        Take a list of items and only return the ones that meet the filter conditions
+        Filter a single item
+        :param item: The item to filter
+        :return: Whether or not the item meets the filter
+        """
+        return self._filter(item)
+
+    def many(self, items: List[any]) -> List[any]:
+        """
+        Filter the list of items
+        :param items: The items to filter
+        :return: Only the items that satisfy the filter
         """
         return [
             item for item in items if self._filter(item)
         ]
-
-    def single(self, item: Union[dict, list]) -> bool:
-        return self._filter(item)
 
 
 if __name__ == "__main__":

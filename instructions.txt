@@ -9,3 +9,4 @@ python -m twine upload dist/*
 java -jar ../../Dependencies/Java/antlr-4.8-complete.jar -Dlanguage=Python3 jtools/grammar/JQL.g4 -o jtools/grammar/
 
 coverage run setup.py test
+coverage report -m

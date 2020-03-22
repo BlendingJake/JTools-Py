@@ -421,6 +421,22 @@ class TestGetter(unittest.TestCase):
             Query('latitude.$wrap("Lat=", @longitude.$prefix(" & Lon="))').single(small_data[0])
         )
 
+    def test_triple_nested(self):
+        data = {
+            "data": "test",
+
+            "keys": {
+                "key1": "data"
+            },
+
+            "key1": "key1"
+        }
+
+        self.assertEqual(
+            data["data"],
+            Query("$index(@keys.$index(@key1))").single(data)
+        )
+
     def test_argument_types_with_inject(self):
         self.assertEqual(3.14, Query("$inject(3.14)").single({}))
         self.assertEqual(type(3.14), type(Query("$inject(3.14)").single({})))
@@ -445,7 +461,7 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(value, Query("$inject(@value)").single({"value": value}))
 
     def test_valid_names(self):
-        keys = ["_", "-", "range[0]", "23", "123asdf", "!not"]
+        keys = ["_", "-", "23", "123asdf", "bill_1234_asdf-24234"]
         value = [1, 2]
         for key in keys:
             self.assertEqual(value, Query(key, convert_ints=False).single({key: value}))
