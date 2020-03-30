@@ -3,10 +3,12 @@ import sys
 import json
 import datetime
 from pathlib import Path
+from ezdict import EZDict
+from random import randint
 
 sys.path.append("../")
 
-from jtools import Query
+from jtools import Query, SpecialNotFoundError
 
 folder = Path(__file__).parent
 with open(folder / "data/10000.json", "r") as file:
@@ -353,6 +355,7 @@ class TestGetter(unittest.TestCase):
         }
         self.assertEqual(sum(data["a"]), Query("a.$sum").single(data))
         self.assertEqual(", ".join(str(i) for i in data["a"]), Query("a.$join").single(data))
+        self.assertEqual(", ".join(str(i) for i in data["a"]), Query("$join_arg(@a)").single(data))
         self.assertEqual(data["a"][2], Query("a.$index(2)").single(data))
         self.assertEqual("nope", Query("a.$index(5, 'nope')").single(data))
         self.assertEqual(data["a"][1:], Query("a.$range(1)").single(data))
@@ -366,9 +369,9 @@ class TestGetter(unittest.TestCase):
         )
 
     def test_register_special(self):
-        self.assertTrue(Query.register_special("cube", lambda value: value ** 3))
+        self.assertTrue(Query.register_special("cube", lambda value, *, context: value ** 3))
         self.assertEqual(8, Query("a.$cube").single({"a": 2}))
-        self.assertFalse(Query.register_special("cube", lambda value: value ** 3))
+        self.assertFalse(Query.register_special("cube", lambda value, *, context: value ** 3))
 
     def test_complex_argument(self):
         self.assertEqual(
@@ -467,7 +470,8 @@ class TestGetter(unittest.TestCase):
             self.assertEqual(value, Query(key, convert_ints=False).single({key: value}))
 
     def test_empty_query(self):
-        self.assertIsNone(Query("").single({"bill": 54}))
+        data = {"bill": 54}
+        self.assertEqual(data, Query("").single(data))
 
     def test_missing_fields(self):
         self.assertEqual(None, Query("a").single({"b": [1, 2]}))
@@ -475,6 +479,84 @@ class TestGetter(unittest.TestCase):
         self.assertEqual('MISSING', Query("b.3", fallback="MISSING").single({"b": [1, 2]}))
         self.assertEqual(2, Query("b.2.$fallback(4).$divide(2)").single({"b": [1, 2]}))
         self.assertEqual(3, Query("b.1.$fallback(4).$divide(2)").single({"b": [1, 6]}))
+
+    def test_store_as_int(self):
+        raw = {"value": 5}
+        self.assertEqual(
+            raw["value"], Query("value.$store_as('temp').$inject(@temp)").single(raw)
+        )
+
+    def test_store_as_dict(self):
+        store = {'field': 'value'}
+        self.assertEqual(
+            store, Query("$inject({'field': 'value'}).$store_as('temp').$inject(@temp)").single({})
+        )
+
+    def test_store_as_with_later_use(self):
+        d = small_data[0]
+        self.assertEqual(
+            f"{d['name']} is {d['age']} and has 5 messages",
+            Query(
+                "greeting.$split('You have ').1.$split(' unread').0.$int.$store_as('unread')" +
+                ".$join_arg([@name, 'is', @age, 'and has', @unread, 'messages'], ' ')"
+            ).single(small_data[0])
+        )
+
+    def test_group_by_flat(self):
+        l = [i % 3 for i in range(12)]
+        ez = EZDict()
+        for item in l:
+            ez.appender(item, item)
+
+        self.assertEqual(ez, Query("$group_by").single(l))
+
+    def test_group_by_nested(self):
+        ez = EZDict()
+        for item in small_data:
+            ez.appender(round(EZDict(item).favoriteFruit.apple, 1), item)
+
+        self.assertEqual(ez, Query("$group_by('favoriteFruit.apple.$round(1)')").single(small_data))
+
+    def test_group_by_nested_count(self):
+        ez = EZDict()
+        for item in small_data:
+            ez.incrementer(round(EZDict(item).favoriteFruit.apple, 1))
+
+        self.assertEqual(ez, Query("$group_by('favoriteFruit.apple.$round(1)', true)").single(small_data))
+
+    def test_sort_flat(self):
+        items = [randint(0, 100) for i in range(10)]
+        self.assertEqual(sorted(items), Query("$sort").single(items))
+
+    def test_sort_age(self):
+        self.assertEqual(
+            sorted(small_data, key=lambda x: x["age"]),
+            Query("$sort('age')").single(small_data)
+        )
+
+    def test_sort_nested(self):
+        self.assertEqual(
+            sorted(small_data, key=lambda x: EZDict(x).favoriteFruit.banana * -0.5),
+            Query("$sort('favoriteFruit.banana.$multiply(-0.5)')").single(small_data)
+        )
+
+    def test_sort_nested_reverse(self):
+        self.assertEqual(
+            sorted(small_data, key=lambda x: EZDict(x).favoriteFruit.banana * -0.5, reverse=True),
+            Query("$sort('favoriteFruit.banana.$multiply(-0.5)', true)").single(small_data)
+        )
+
+    def test_special_not_found_error(self):
+        self.assertRaises(
+            SpecialNotFoundError,
+            lambda: Query("age.$mixedup").single(small_data[0])
+        )
+
+    def test_dict(self):
+        self.assertEqual(
+            small_data[0]["favoriteFruit"],
+            Query("favoriteFruit.$items.$dict").single(small_data[0])
+        )
 
 
 if __name__ == "__main__":

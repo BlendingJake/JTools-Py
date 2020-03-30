@@ -16,10 +16,28 @@
 >goal of making it a seamless experience to go from querying/filtering/formatting in JavaScript to Python and back.
 
 ## Recent Changes
- * `1.1.2`
-    * Minor changes to documentation
-    * Mostly just to get version back on track with repository 
-
+ * `1.1.3`
+  * Changed the behavior of `Query("")`, from returning the fallback value, to returning the source data element itself.
+  For example, `Query("").single(data) == data`.
+  * Added `SpecialNotFoundError`, which is raised when an invalid special is queried. Can be imported as 
+  `from jtools import SpecialNotFoundError`
+  * Added new specials
+   * `$store_as(name)` Store the current query value in the current context for later use in the query. This does not 
+   change the underlying data being queried.
+   * `$group_by(key="", count=false)` Take an incoming list and group the values by the specified key.
+   Any valid JQL query can be used for the key, so `""` means the value itself. The result by default will be
+   keys to a list of values. However, if `count=true`, then the result will be keys to the number of elements with each 
+   key.
+   * `$sort(key="", reverse=false)` Sort an incoming list of values by a given key which can be any valid JQL query.
+   By default, `key=""` means the top-level value will be sorted on.
+   * `$dict` Take an incoming list of `(key, value)` pairs and make a dict out of them.
+   * `$join_arg(arg, sep=', ')` Similar to `$join` except this operates on an argument instead of the query value.
+   Essentially a shortened form of `$inject(arg).$join(sep)`.
+  * Changed the underlying special function definition to now include the keyword argument `context`. This argument is 
+  implemented to only be accessed by name to avoid collision if the user provides too many arguments in their query. 
+  The purpose of the context is to support specials adding values temporarily to the data
+  namespace of the query, like `$store_as` does.
+   
 ## Glossary
  * [`Installation`](#install)
  * [`JQL`](#jql)
@@ -129,7 +147,8 @@ results in `"red"`
  
  * More specials can be added by using the class attribute `.register_special()` 
  like so: `Query.register_special(<name>, <func>)`. The function should take
- at least one argument, which is the current value in the query string: `lambda value, *args: ...`
+ at least one argument positional argument, which is the current value in the query string,
+ and the keyword argument 'context' at the end: `lambda value, *args, context: ...`
  
 ### <a name="specials">Specials</a>
 >Below is a list of all of the specials that can be used. Additionally, more can be added
@@ -140,6 +159,12 @@ General
   * `$lookup(map: dict, fallback=None) -> any`: Lookup the current value in the provided map/dict 
   * `$inject(value: any) -> any`: Inject a value into the query
   * `$print -> any`: Print the current query value before continuing to pass that value along
+  * `store_as(name: str) -> any`: Store the current query value in the current context for later use in the query. This does not 
+   change the underlying data being queried.
+  * `group_by(key="", count=false) -> Dict[any, Union[List[any], int]]`: Take an incoming list and group the values 
+  by the specified key. Any valid JQL query can be used for the key, so `""` means the value itself. 
+  The result by default will be keys to a list of values. However, if `count=true`, then the result will be keys 
+  to the number of elements with each key.
   
 Maps
   * `$keys -> list`
@@ -163,6 +188,7 @@ Type Conversions
   * `$set -> set`
   * `$float -> float`
   * `$string -> str`
+  * `$dict -> dict`: Take an incoming list of `(key, value)` pairs and make a dict out of them.
   * `$int -> int`
   * `$not -> bool`: Returns `!value`
   * `$fallback(fallback) -> value or fallback`: If the value is None, then it will be replaced with `fallback`.
@@ -202,10 +228,14 @@ Strings
 Lists
   * `$sum -> Union[float, int]`: Return the sum of the items in the value
   * `$join(sep=", ") -> str`: Join a list using the specified separator
+  * `$join_arg(arg: list, sep=", ")`: Similar to `$join` except this operates on an argument instead of the query value.
+  Essentially a shortened form of `$inject(arg).$join(sep)`.
   * `$index(index, fallback=null) -> any`: Index a list. Negative indices are allowed.
   * `$range(start, end=null) -> `: Get a sublist. Defaults to `value[start:]`, 
   but an end value can be specified. Negative indices are allowed.
   * `$remove_nulls -> List[any]`: Remove any values that are `None`
+  * `$sort(key="", reverse=false)`: Sort an incoming list of values by a given key which can be any valid JQL query.
+  By default, `key=""` means the top-level value will be sorted on.
   * `$map(special, *args) -> list`: Apply `special` to every element in the 
   value. Arguments can be passed through to the special being used, like `$map("index", "name")`
   
@@ -434,6 +464,10 @@ for item in items:
  * reusing `Formatter` can improve performance by 377x.
 
 ## <a name="changelog">Changelog</a>  
+ * `1.1.2`
+    * Minor changes to documentation
+    * Mostly just to get version back on track with repository 
+    
  * `1.1.1`
    * Add `antlr4-python3` requirement to `setup.py` so that installation will get the needed dependencies
    * Change `JQL` so that field and special names must only contain `[-a-zA-Z0-9_]`. `$index` can be used to get fields
