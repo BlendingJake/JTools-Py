@@ -36,16 +36,28 @@ def wildcard(value: dict, nxt: Union[str, int], just_field=True):
     return out
 
 
+def value_map(value, special: str, duplicate=True, *args, context):
+    real_value = {**value} if duplicate else value
+
+    for key in real_value:
+        real_value[key] = Query.SPECIALS[special](value[key], *args, context=context)
+
+    return real_value
+
+
 def print_return(value, *, _):
     print(value)
     return value
 
 
-def index(value, i, fallback=None):
+def index(value, i, fallback=None, *, context):
     try:
         return value[i]
-    except IndexError:
-        return fallback
+    except (IndexError, KeyError, TypeError):
+        try:
+            return context[i]
+        except (IndexError, KeyError, TypeError):
+            return fallback
 
 
 def store_as(value, name, *, context):
@@ -89,11 +101,8 @@ def sort(value, key="", reverse=False, *, context) -> list:
     :param context:
     :return:
     """
-    if key is None:
-        return sorted(value, reverse=reverse)
-    else:
-        query = Query(key)
-        return sorted(value, key=query.single, reverse=reverse)
+    query = Query(key)
+    return sorted(value, key=query.single, reverse=reverse)
 
 
 class Query:
@@ -111,6 +120,7 @@ class Query:
         "values": lambda value, *, context: list(value.values()),
         "items": lambda value, *, context: list(value.items()),
         "wildcard": lambda value, nxt, just_field=True, *, context: wildcard(value, nxt, just_field),
+        "value_map": lambda *args, **kwargs: value_map(*args, **kwargs),
 
         # type conversions
         "set": lambda value, *, context: set(value),
@@ -137,7 +147,7 @@ class Query:
         "pow": lambda value, num, *, context: value ** num,
         "abs": lambda value, *, context: abs(value),
         "distance": lambda value, other, *, context: math.sqrt(sum((a-b)**2 for a, b in zip(value, other))),
-        "math": lambda value, attr, *, context: getattr(math, attr)(value),
+        "math": lambda value, attr, *args, context: getattr(math, attr)(value, *args),
         "round": lambda value, n=2, *, context: round(float(value), n),
 
         # string
@@ -155,7 +165,7 @@ class Query:
         "sum": lambda value, *, context: sum(value),
         "join": lambda value, sep=", ", *, context: sep.join(str(i) for i in value),
         "join_arg": lambda _, arg, sep=', ', *, context: sep.join(str(i) for i in arg),
-        "index": lambda value, i, fallback=None, *, context: index(value, i, fallback),
+        "index": lambda *args, **kwargs: index(*args, **kwargs),
         "range": lambda value, start, end=None, *, context: value[start: end if end is not None else len(value)],
         "remove_nulls": lambda value, *, context: [v for v in value if v is not None],
         "sort": sort,
@@ -170,13 +180,13 @@ class Query:
     ]
 
     def __init__(self,
-                 query: Union[str, List[str], JQLQuery, List[JQLQuery]], convert_ints: bool = True,
-                 fallback: any = None):
+                 query: Union[str, List[str], JQLQuery, List[JQLQuery]], fallback: any = None,
+                 convert_ints: bool = True):
         """
         Create a query object from a JQL query string, or list of JQL query strings.
         :param query: The JQL query string(s)
-        :param convert_ints: Whether to treat digit-only field values as integers or strings
         :param fallback: A fallback value that will be used if a field cannot be found
+        :param convert_ints: Whether to treat digit-only field values as integers or strings
         """
         self.multiple: bool = not (isinstance(query, str) or isinstance(query, JQLQuery))
         self.fields: Union[List[str], List[JQLQuery]] = query if self.multiple else [query]
@@ -216,22 +226,12 @@ class Query:
                         else:
                             value = self.fallback
             elif isinstance(part, JQLSpecial):
-                arguments = []
-                arguments_safe = True
-
-                for arg in part.arguments:
-                    v = self._value(original, arg, context)
-                    if v != self.fallback:
-                        arguments.append(v)
-                    else:
-                        value = self.fallback
-                        arguments_safe = False
-
-                if arguments_safe:
-                    if part.special in self.SPECIALS:
-                        value = self.SPECIALS[part.special](value, *arguments, context=context)
-                    else:
-                        raise SpecialNotFoundError(part.special)
+                if part.special in self.SPECIALS:
+                    value = self.SPECIALS[part.special](
+                        value, *[self._value(original, arg, context) for arg in part.arguments], context=context
+                    )
+                else:
+                    raise SpecialNotFoundError(part.special)
 
         return value
 
@@ -250,28 +250,32 @@ class Query:
         else:
             return q_or_v.value
 
-    def single(self, item: Union[list, dict]) -> Union[Any, List[Any]]:
+    def single(self, item: Union[list, dict], context: dict = None) -> Union[Any, List[Any]]:
         """
         Query the item
         :param item: The item to query
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
         :return: A value, or list of values, depending on whether one or multiple queries are present
         """
         values = []
         for query in self.parts:
             if query is not None:
-                values.append(self._query(item, query, {}))
+                values.append(self._query(item, query, {} if context is None else context))
             else:
                 values.append(self.fallback)
 
         return values if self.multiple else values[0]
 
-    def many(self, items: List[Union[list, dict]]) -> Union[List[Any], List[List[Any]]]:
+    def many(self, items: List[Union[list, dict]], context: dict = None) -> Union[List[Any], List[List[Any]]]:
         """
         Query the items
         :param items: The items to query
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on an item
         :return: A list of values or a list of lists of values, depending on whether one or multiple queries are present
         """
-        return [self.single(item) for item in items]
+        return [self.single(item, context) for item in items]
 
     @classmethod
     def register_special(cls, name: str, func: Callable) -> bool:

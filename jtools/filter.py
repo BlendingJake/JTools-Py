@@ -31,6 +31,10 @@ class Condition:
 
         return val
 
+    @staticmethod
+    def ander(cond1, cond2, *conditions):
+        return cond1.clone().and_(cond2, *conditions)
+
     def __or__(self, other):
         t = []
         for l in (self, other):
@@ -52,6 +56,10 @@ class Condition:
 
         return val
 
+    @staticmethod
+    def orer(cond1, cond2, *conditions):
+        return cond1.clone().or_(cond2, *conditions)
+
     def __invert__(self):
         self.output = [{"not": self.output}]
         return self
@@ -59,8 +67,66 @@ class Condition:
     def not_(self):
         return ~self
 
-    def filters(self) -> List[dict]:
+    def to_list(self) -> list:
         return self.output
+
+    @staticmethod
+    def from_list(conditions):
+        condition = Condition("", "", "")
+        condition.output = conditions
+        return condition
+
+    def clone(self, deep=False):
+        condition = Condition("", "", "")
+        if deep:
+            pass
+        else:
+            condition.output = [*self.output]
+
+        return condition
+
+    @classmethod
+    def _deep_clone(cls, conditions: List[dict]):
+        output = []
+        for cond in conditions:
+            if isinstance(cond, list):
+                item = cls._deep_clone(cond)
+            elif "or" in cond:
+                item = {"or": cls._deep_clone(cond["or"])}
+            elif "not" in cond:
+                item = {"or": cls._deep_clone(cond["not"])}
+            else:
+                item = {**cond}
+
+            output.append(item)
+        return output
+
+    def traverse(self, callback: callable, on_duplicate=False):
+        """
+        Traverse/visit every filter in the condition, either on the current condition, or on a deep copy.
+        The condition used will be returned, which is either this one, or a duplicate.
+        Note, a filter here is of the form { field: ..., operator: ..., value: ... }, ignoring "and", "not", and "or"
+        conditions
+        :param callback: A function that will be called and passed the current filter in the traversal
+        :param on_duplicate:
+        """
+        condition = self.clone(True) if on_duplicate else self
+        filters = [*condition.output]
+
+        i = 0
+        while i < len(filters):
+            f = filters[i]
+            if isinstance(f, list):
+                filters.extend(f)
+            elif "or" in f:
+                filters.extend(f["or"])
+            elif "not" in f:
+                filters.extend(f["not"])
+            else:
+                callback(f)
+
+            i += 1
+        return filters
 
 
 class ValueLessCondition:
@@ -130,11 +196,11 @@ class Key:
     def not_contains(self, other):
         return Condition(self.field, "!contains", other)
 
-    def interval(self, other):
-        return Condition(self.field, "interval", other)
+    def interval(self, *values):
+        return Condition(self.field, "interval", values[0] if len(values) == 1 else values)
 
-    def not_interval(self, other):
-        return Condition(self.field, "!interval", other)
+    def not_interval(self, *values):
+        return Condition(self.field, "!interval", values[0] if len(values) == 1 else values)
 
     def startswith(self, other):
         return Condition(self.field, "startswith", other)
@@ -194,7 +260,7 @@ class Filter:
         self.missing_field_response = missing_field_response
 
         if isinstance(filters, Condition):
-            self.filters = filters.filters()
+            self.filters = filters.to_list()
         else:
             self.filters = filters
 
@@ -216,20 +282,20 @@ class Filter:
 
         return out
 
-    def _filter(self, item: Union[dict, list], filters=None, oring=False) -> bool:
+    def _filter(self, item: Union[dict, list], filters=None, oring=False, context: dict = None) -> bool:
         if filters is None:
             filters = self.filters
 
         overall = None
         for f in filters:
             if isinstance(f, list):
-                c = self._filter(item, f)
+                c = self._filter(item, f, oring, context)
             elif "or" in f:
-                c = self._filter(item, f["or"], True)
+                c = self._filter(item, f["or"], True, context)
             elif "not" in f:
-                c = not self._filter(item, f["not"])
+                c = not self._filter(item, f["not"], oring, context)
             else:
-                query_result = self.queries[f["field"]].single(item)
+                query_result = self.queries[f["field"]].single(item, context)
                 if query_result is self.MISSING and f["operator"] not in ("present", "!present"):
                     c = self.missing_field_response
                 else:
@@ -250,22 +316,27 @@ class Filter:
 
         return self.empty_filters_response if overall is None else overall
 
-    def single(self, item) -> bool:
+    def single(self, item, context: dict = None) -> bool:
         """
         Filter a single item
         :param item: The item to filter
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
         :return: Whether or not the item meets the filter
         """
-        return self._filter(item)
+        return self._filter(item, None, False, {} if context is None else context)
 
-    def many(self, items: List[any]) -> List[any]:
+    def many(self, items: List[any], context: dict = None) -> List[any]:
         """
-        Filter the list of items
+        Filter the list of items. Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
         :param items: The items to filter
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
         :return: Only the items that satisfy the filter
         """
         return [
-            item for item in items if self._filter(item)
+            item for index, item in enumerate(items)
+            if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)})
         ]
 
 

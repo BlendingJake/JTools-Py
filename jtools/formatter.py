@@ -45,14 +45,14 @@ class Formatter:
         except JQLParseError:
             pass
 
-    def _format(self, mq: JQLMultiQuery, item) -> str:
+    def _format(self, mq: JQLMultiQuery, item, context: dict) -> str:
         if mq is None:
             return self.fallback
         else:
             output = []
             for part in mq.queries:
                 if isinstance(part, JQLQuery):
-                    v = Query(part, self.convert_ints, self.MISSING).single(item)
+                    v = Query(part, convert_ints=self.convert_ints, fallback=self.MISSING).single(item, context)
                 else:
                     v = part.text.replace("@@", "@")
 
@@ -63,21 +63,25 @@ class Formatter:
 
             return "".join(str(p) for p in output)
 
-    def single(self, item: any) -> str:
+    def single(self, item: any, context: dict = None) -> str:
         """
         Format a single item
         :param item: The item to format
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
         :return: The formatted string
         """
-        return self._format(self.multi_query, item)
+        return self._format(self.multi_query, item, context)
 
-    def many(self, items: List[any]) -> List[str]:
+    def many(self, items: List[any], context: dict = None) -> List[str]:
         """
         Format a list of items
         :param items: The items to format
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
         :return: A list of formatted strings
         """
-        return [self.single(item) for item in items]
+        return [self.single(item, context) for item in items]
 
 
 if __name__ == "__main__":

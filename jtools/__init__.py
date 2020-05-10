@@ -4,4 +4,4 @@ from .formatter import Formatter
 
 __all__ = ["Query", "Key", "Condition", "Filter", "Formatter", "SpecialNotFoundError",
            "__version__"]
-__version__ = "1.1.3"
+__version__ = "1.1.5"

@@ -362,6 +362,13 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(data["a"][1:-1], Query("a.$range(1, -1)").single(data))
         self.assertEqual([d for d in data["b"] if d is not None], Query("b.$remove_nulls").single(data))
 
+    def test_value_map(self):
+        data = {"a": [1, 2, 3], "b": [1, 2], "c": [3, 5, 3], "d": [1, 2, 5, 3, 4]}
+        self.assertEqual(
+            [len(i) for i in data.values()],
+            Query("$value_map('length').$values").single(data)
+        )
+
     def test_special_map(self):
         self.assertEqual(
             "\n".join([f"{i['id']}: {i['name']}" for i in small_data[0]["friends"]]),
@@ -556,6 +563,22 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(
             small_data[0]["favoriteFruit"],
             Query("favoriteFruit.$items.$dict").single(small_data[0])
+        )
+
+    def test_context(self):
+        self.assertEqual(
+            5,
+            Query("context").single({}, {"context": 5})
+        )
+
+        self.assertEqual(
+            5,
+            Query("context.nested").single({}, {"context": {"nested": 5}})
+        )
+
+        self.assertEqual(
+            5,
+            Query("overlapping").single({"overlapping": 5}, {"overlapping": "nope"})
         )
 
 

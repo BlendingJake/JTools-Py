@@ -46,7 +46,7 @@ class TestFormatter(unittest.TestCase):
     def test_format_missing_nested_field(self):
         self.assertEqual(
             "<missing>",
-            Formatter("@a.$index(@index)").single({"a": [1, 2]})
+            Formatter("@a.$index(@index, '<missing>')").single({"a": [1, 2]})
         )
 
     def test_nested_number(self):

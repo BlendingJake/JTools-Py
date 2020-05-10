@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.append("../")
 
-from jtools import Filter, Key
+from jtools import Filter, Key, Condition
 
 folder = Path(__file__).parent
 with open(folder / "data/10000.json", "r") as file:
@@ -227,6 +227,36 @@ class TestFilter(unittest.TestCase):
         self.assertEqual(19, len(Filter(Key("company") != "XYLAR").many(small_data)))
         self.assertEqual(19, len(Filter(Key("company").ne("XYLAR")).many(small_data)))
         self.assertEqual(19, len(Filter(Key("company").sne("XYLAR")).many(small_data)))
+
+    def test_filter_by_index(self):
+        self.assertEqual(
+            small_data[5:7],
+            Filter(Condition.ander(
+                Key("INDEX") >= 5, Key("INDEX") < 7
+            )).many(small_data)
+        )
+
+        self.assertEqual(
+            small_data[1:6],
+            Filter(Key("INDEX").interval(1, 5)).many(small_data)
+        )
+
+    def test_filter_traversal(self):
+        filters = [
+            {"field": "blah", "operator": "===", "value": "blah"},
+            {"field": "blah2", "operator": "===", "value": "blah2"},
+            {"field": "blah3", "operator": "===", "value": "blah3"},
+            {"field": "blah4", "operator": "===", "value": "blah4"},
+            {"field": "blah5", "operator": "===", "value": "blah5"}
+        ]
+
+        condition = Condition.from_list([
+            {"or": filters[:2]},
+            {"not": [filters[2]]},
+            {"not": [{"or": filters[3:]}]}
+        ])
+
+        condition.traverse(lambda f: self.assertEqual(filters.pop(0), f))
 
 
 if __name__ == "__main__":
