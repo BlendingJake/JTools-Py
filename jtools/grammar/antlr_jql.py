@@ -44,7 +44,7 @@ class JQLQueryListener(JQLListener):
             try:
                 fi = int(f.field)
                 f.set_field(fi)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
 
         self.stack[-1].add(f)
@@ -63,6 +63,61 @@ class JQLQueryListener(JQLListener):
     def exitSpecial_name(self, ctx: JQLParser.Special_nameContext):
         self.stack[-1].set_special(ctx.getText())
         logger.debug(self.stack)
+
+    def enterArgument(self, ctx: JQLParser.ArgumentContext):
+        arg = JQLArgument()
+        self.stack[-1].add(arg)
+        self.stack.append(arg)
+
+    def exitArgument(self, ctx: JQLParser.ArgumentContext):
+        self.stack.pop()
+
+    def enterKeyword_argument(self, ctx: JQLParser.Keyword_argumentContext):
+        arg = JQLKeywordArgument()
+        self.stack[-1].add(arg)
+        self.stack.append(arg)
+
+    def exitKeyword_argument(self, ctx: JQLParser.Keyword_argumentContext):
+        self.stack.pop()
+
+    def enterName(self, ctx: JQLParser.NameContext):
+        if isinstance(self.stack[-1], JQLKeywordArgument):
+            self.stack[-1].set_name(ctx.getText())
+
+    # EXPRESSIONS
+    def enterArith_expr(self, ctx: JQLParser.Arith_exprContext):
+        self.enter_expr()
+
+    def exitArith_expr(self, ctx: JQLParser.Arith_exprContext):
+        self.stack.pop()
+
+    def enterFactor_expr(self, ctx: JQLParser.Factor_exprContext):
+        self.enter_expr()
+
+    def exitFactor_expr(self, ctx: JQLParser.Factor_exprContext):
+        self.stack.pop()
+
+    def enterPower_expr(self, ctx: JQLParser.Power_exprContext):
+        self.enter_expr()
+
+    def exitPower_expr(self, ctx: JQLParser.Power_exprContext):
+        self.stack.pop()
+
+    # EXPRESSION OPERATORS
+    def enterArith_operator(self, ctx: JQLParser.Arith_operatorContext):
+        self.stack[-1].set_operator(ctx.getText())
+
+    def enterFactor_operator(self, ctx: JQLParser.Factor_operatorContext):
+        self.stack[-1].set_operator(ctx.getText())
+
+    def enterPower_operator(self, ctx: JQLParser.Power_operatorContext):
+        self.stack[-1].set_operator(ctx.getText())
+
+    def enterNumber(self, ctx: JQLParser.NumberContext):
+        if isinstance(self.stack[-1], JQLExpression):
+            v = JQLValue()
+            v.value = self.parse_primitive(ctx.getText())
+            self.stack[-1].add(v)
 
     def enterList_value(self, ctx: JQLParser.List_valueContext):
         self.enter_value(JQLList)
@@ -90,6 +145,7 @@ class JQLQueryListener(JQLListener):
             val = JQLValue()
             val.value = self.parse_primitive(text)
             self.stack[-1].add(val)
+
         logger.debug(self.stack)
 
     # helpers
@@ -116,6 +172,11 @@ class JQLQueryListener(JQLListener):
         self.stack.append(v)
         logger.debug(self.stack)
 
+    def enter_expr(self):
+        expr = JQLExpression()
+        self.stack[-1].add(expr)
+        self.stack.append(expr)
+
 
 class JQLMultiQueryListener(JQLQueryListener):
     def __init__(self, convert_ints=True):
@@ -135,14 +196,14 @@ class JQLMultiQueryListener(JQLQueryListener):
 
 
 class JQLParseError(Exception):
-    def __init__(self, e):
-        super().__init__(e)
+    def __init__(self, e, got, expected):
+        super().__init__(f"JQL parse error. Got {repr(got)}, expected {repr(expected)}")
 
 
 class JQLErrorStrategy(DefaultErrorStrategy):
     def reportError(self, recognizer: Parser, e: RecognitionException):
         if isinstance(e, InputMismatchException):
-            raise JQLParseError(str(e))
+            raise JQLParseError(str(e), e.offendingToken, e.getExpectedTokens())
         else:
             super().reportError(recognizer, e)
 
@@ -170,6 +231,9 @@ class JQLQueryBuilder(Builder):
 
         logger.debug(self.printer.root)
 
+    def __repr__(self):
+        return repr(self.printer.root)
+
     def get_built_query(self) -> JQLQuery:
         return self.printer.root
 
@@ -192,19 +256,4 @@ class JQLMultiQueryBuilder(Builder):
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
 
-    JQLQueryBuilder("tests")
-    JQLQueryBuilder("tests.test")
-    JQLQueryBuilder("tests.$wrap")
-    JQLQueryBuilder("$wrap")
-    JQLQueryBuilder("$wrap.text")
-    JQLQueryBuilder("$wrap(5)")
-    JQLQueryBuilder("$wrap('5')")
-    JQLQueryBuilder('$wrap("5")')
-    JQLQueryBuilder('$wrap(-4.5)')
-    JQLQueryBuilder('$wrap([], {}, {:}, true, false, null, "true")')
-    JQLQueryBuilder('$wrap([1, 2], {3, "4"}, {4: 5, "true": false})')
-    JQLQueryBuilder('$wrap(@prefix, [5, @prefix])')
-    JQLQueryBuilder('$wrap(@prefix, [5, @prefix.$sum, @prefix.$join(", ")])')
-    JQLQueryBuilder('$wrap({@prefix: "john", @prefix: @prefix, "john": @prefix})')
-
-    JQLMultiQueryBuilder("@tests.test something else @tests.$wrap")
+    JQLQueryBuilder("meta.timestamp.$special(4 * 5)")

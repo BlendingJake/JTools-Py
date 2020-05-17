@@ -219,8 +219,6 @@ class Key:
 
 
 class Filter:
-    MISSING = object()
-
     _filters = {
         ">": lambda field, value: field > value,
         "<": lambda field, value: field < value,
@@ -242,8 +240,8 @@ class Filter:
         "startswith": lambda field, value: field.startswith(value),
         "endswith": lambda field, value: field.endswith(value),
 
-        "present": lambda field, _: field is not Filter.MISSING,
-        "!present": lambda field, _: field is Filter.MISSING,
+        "present": lambda field, _: field is not Query.MISSING,
+        "!present": lambda field, _: field is Query.MISSING,
     }
 
     def __init__(self, filters: Union[Condition, List[dict]], convert_ints: bool = True,
@@ -278,7 +276,7 @@ class Filter:
             elif "not" in f:
                 out.update(self._preprocess(f["not"], convert_ints))
             elif f["field"] not in out:
-                out[f["field"]] = Query(f["field"], fallback=self.MISSING, convert_ints=convert_ints)
+                out[f["field"]] = Query(f["field"], fallback=Query.MISSING, convert_ints=convert_ints)
 
         return out
 
@@ -296,14 +294,15 @@ class Filter:
                 c = not self._filter(item, f["not"], oring, context)
             else:
                 query_result = self.queries[f["field"]].single(item, context)
-                if query_result is self.MISSING and f["operator"] not in ("present", "!present"):
+                if query_result is Query.MISSING and f["operator"] not in ("present", "!present"):
                     c = self.missing_field_response
                 else:
                     c = self._filters[f["operator"]](query_result, f["value"])
 
             if overall is None:
                 overall = c
-            elif "or" in f or oring:
+
+            if "or" in f or oring:
                 overall = c or overall
 
                 if overall:  # shortcut or

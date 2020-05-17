@@ -4,3 +4,4 @@ htmlcov
 dist
 .idea
 build
+__test__.py
