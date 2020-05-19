@@ -179,6 +179,15 @@ class JQLListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by JQLParser#primitive_value.
+    def enterPrimitive_value(self, ctx:JQLParser.Primitive_valueContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#primitive_value.
+    def exitPrimitive_value(self, ctx:JQLParser.Primitive_valueContext):
+        pass
+
+
     # Enter a parse tree produced by JQLParser#list_value.
     def enterList_value(self, ctx:JQLParser.List_valueContext):
         pass

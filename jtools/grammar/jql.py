@@ -68,7 +68,7 @@ class JQLValue:
         return f"<Value: value={repr(self.value)}>"
 
     def add(self, value):
-        pass
+        self.value = value
 
 
 class JQLList(JQLValue):

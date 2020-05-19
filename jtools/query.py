@@ -113,12 +113,28 @@ def sort(value, key: Union[str, int] = "", reverse=False, *, context) -> list:
         return sorted(value, key=query.single, reverse=reverse)
 
 
-def min_dual_list(list1, list2, just_first=True, max_value=False):
-    sorted_l1 = sorted([(a, b) for a, b in zip(list1, list2)], key=lambda pair: pair[0], reverse=max_value)
-    if just_first:
-        return sorted_l1[0][0]
+def min_key(value, just_key=True, *, context):
+    key = None
+    for k, v in value:
+        if key is None or v < value[key]:
+            key = k
+
+    if just_key:
+        return key
     else:
-        return sorted_l1[0]
+        return key, value[key]
+
+
+def max_key(value, just_key=True, *, context):
+    key = None
+    for k, v in value:
+        if key is None or v > value[key]:
+            key = k
+
+    if just_key:
+        return key
+    else:
+        return key, value[key]
 
 
 def time_part(value: datetime, part, *, context):
@@ -196,15 +212,8 @@ class Query:
         "items": lambda value, *, context: list(value.items()),
         "wildcard": lambda value, nxt, just_field=True, *, context: wildcard(value, nxt, just_field),
         "value_map": lambda *args, **kwargs: value_map(*args, **kwargs),
-        "min_key": lambda value, *, just_key=True, context: min_dual_list(
-            list(value.keys()), list(value.values()), just_first=just_key),
-        "min_value": lambda value, *, just_value=True, context: min_dual_list(
-            list(value.values()), list(value.keys()), just_first=just_value),
-        "max_key": lambda value, *, just_key=True, context: min_dual_list(
-            list(value.keys()), list(value.values()), just_first=just_key, max_value=True),
-        "max_value": lambda value, *, just_value=True, context: min_dual_list(
-            list(value.values()), list(value.keys()), just_first=just_value, max_value=True),
-
+        "min_key": min_key,
+        "max_key": max_key,
 
         # type conversions
         "set": lambda value, *, context: set(value),
@@ -235,6 +244,8 @@ class Query:
         "math": lambda value, attr, *args, context: getattr(math, attr)(value, *args),
         "round": lambda value, n=2, *, context: round(float(value), n),
         "arith": lambda value, op, arg_value, *, context: Query.MATH_OPERATIONS[op](value, arg_value),
+        "min": lambda value, *, context: min(value),
+        "max": lambda value, *, context: max(value),
 
         # string
         "lowercase": lambda value, context: value.lower(),

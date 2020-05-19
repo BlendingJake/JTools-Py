@@ -122,11 +122,20 @@ class JQLQueryListener(JQLListener):
     def enterList_value(self, ctx: JQLParser.List_valueContext):
         self.enter_value(JQLList)
 
+    def exitList_value(self, ctx: JQLParser.List_valueContext):
+        self.stack.pop()
+
     def enterSet_value(self, ctx: JQLParser.Set_valueContext):
         self.enter_value(JQLSet)
 
+    def exitSet_value(self, ctx: JQLParser.Set_valueContext):
+        self.stack.pop()
+
     def enterObject_value(self, ctx: JQLParser.Object_valueContext):
         self.enter_value(JQLDict)
+
+    def exitObject_value(self, ctx: JQLParser.Object_valueContext):
+        self.stack.pop()
 
     def exitKey(self, ctx: JQLParser.KeyContext):
         txt = ctx.getText()
@@ -136,17 +145,11 @@ class JQLQueryListener(JQLListener):
             self.stack[-1].add(v)
         logger.debug(self.stack)
 
-    def exitValue(self, ctx: JQLParser.ValueContext):
-        # 2 types of values we can have - primitive or already parsed value
+    def exitPrimitive_value(self, ctx: JQLParser.Primitive_valueContext):
         text = ctx.getText()
-        if text[0] in ("[", "{"):
-            self.stack.pop()
-        elif text[0] != "@":  # query will pop itself on exitQuery
-            val = JQLValue()
-            val.value = self.parse_primitive(text)
-            self.stack[-1].add(val)
-
-        logger.debug(self.stack)
+        val = JQLValue()
+        val.value = self.parse_primitive(text)
+        self.stack[-1].add(val)
 
     # helpers
     @classmethod

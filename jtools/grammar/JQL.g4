@@ -50,7 +50,12 @@ value
     | list_value
     | set_value
     | object_value
-    | number
+    | arith_expr
+    | primitive_value
+    ;
+
+primitive_value
+    : number
     | STRING
     | PRIMITIVE
     ;
