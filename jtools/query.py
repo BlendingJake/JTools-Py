@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import math
 from os import environ
 from dateutil.parser import parse
+from .filter import Filter
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -50,14 +51,54 @@ def print_return(value, *, context):
     return value
 
 
-def index(value, i, fallback=None, *, context):
-    try:
-        return value[i]
-    except (IndexError, KeyError, TypeError):
-        try:
-            return context[i]
-        except (IndexError, KeyError, TypeError):
-            return fallback
+def index_special(value, i: Union[int, str, List[Union[str, int]]], extended=False, fallback=None, *, context):
+    multiple = isinstance(i, list)
+
+    if extended:
+        key = str(i) + str(fallback)
+        if key in QUERY_CACHE:
+            query = QUERY_CACHE[key]
+        else:
+            query = Query(
+                [str(x) for x in i] if multiple else str(i),
+                fallback=fallback
+            )
+            QUERY_CACHE[key] = query
+
+        return query.single(value, context=context)
+    else:
+        out = []
+        for x in (i if multiple else [i]):
+            try:
+                out.append(value[x])
+            except (IndexError, KeyError, TypeError):
+                try:
+                    out.append(context[x])
+                except (IndexError, KeyError, TypeError):
+                    out.append(fallback)
+
+        return out if multiple else out[0]
+
+
+def filter_special(value, *args, single=True, context):
+    if len(args) == 3:
+        f = [{"field": args[0], "operator": args[1], "value": args[2]}]
+    elif isinstance(args[0], dict):
+        f = [args[0]]
+    else:
+        f = args[0]
+
+    key = str(f)
+    if key in FILTER_CACHE:
+        filterer = FILTER_CACHE[key]
+    else:
+        filterer = Filter(f)
+        FILTER_CACHE[key] = filterer
+
+    if single:
+        return filterer.single(value, context=context)
+    else:
+        return filterer.many(value, context=context)
 
 
 def store_as(value, name, *, context):
@@ -76,7 +117,12 @@ def group_by(value, key: Union[str, int] = "", count=False, *, context) -> Dict[
     if isinstance(key, int):
         get_value = lambda x: x[key]
     else:
-        query = Query(key)
+        if key in QUERY_CACHE:
+            query = QUERY_CACHE[key]
+        else:
+            query = Query(key)
+            QUERY_CACHE[key] = query
+
         get_value = lambda x: query.single(x)
 
     out = {}
@@ -109,11 +155,16 @@ def sort(value, key: Union[str, int] = "", reverse=False, *, context) -> list:
     if isinstance(key, int):
         return sorted(value, key=lambda x: x[key], reverse=reverse)
     else:
-        query = Query(key)
+        if key in QUERY_CACHE:
+            query = QUERY_CACHE[key]
+        else:
+            query = Query(key)
+            QUERY_CACHE[key] = query
+
         return sorted(value, key=query.single, reverse=reverse)
 
 
-def min_key(value, just_key=True, *, context):
+def key_of_min_value(value, just_key=True, *, context):
     key = None
     for k, v in value:
         if key is None or v < value[key]:
@@ -125,7 +176,7 @@ def min_key(value, just_key=True, *, context):
         return key, value[key]
 
 
-def max_key(value, just_key=True, *, context):
+def key_of_max_value(value, just_key=True, *, context):
     key = None
     for k, v in value:
         if key is None or v > value[key]:
@@ -212,8 +263,8 @@ class Query:
         "items": lambda value, *, context: list(value.items()),
         "wildcard": lambda value, nxt, just_field=True, *, context: wildcard(value, nxt, just_field),
         "value_map": lambda *args, **kwargs: value_map(*args, **kwargs),
-        "min_key": min_key,
-        "max_key": max_key,
+        "key_of_min_value": key_of_min_value,
+        "key_of_max_value": key_of_max_value,
 
         # type conversions
         "set": lambda value, *, context: set(value),
@@ -265,7 +316,7 @@ class Query:
         "sum": lambda value, *, context: sum(value),
         "join": lambda value, sep=", ", *, context: sep.join(str(i) for i in value),
         "join_arg": lambda _, arg, sep=', ', *, context: sep.join(str(i) for i in arg),
-        "index": lambda *args, **kwargs: index(*args, **kwargs),
+        "index": index_special,
         "range": lambda value, start, end=None, *, context: value[start: end if end is not None else len(value)],
         "remove_nulls": lambda value, *, context: [v for v in value if v is not None],
         "sort": sort,
@@ -419,6 +470,10 @@ class Query:
 class SpecialNotFoundError(Exception):
     def __init__(self, special):
         super().__init__(f"'{special}' is not a valid special. Valid options are {list(Query.SPECIALS.keys())}")
+
+
+QUERY_CACHE: Dict[str, Query] = {}
+FILTER_CACHE: Dict[str, Filter] = {}
 
 
 if __name__ == "__main__":

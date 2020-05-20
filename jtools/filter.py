@@ -338,6 +338,30 @@ class Filter:
             if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)})
         ]
 
+    def first(self, items: List[any], context: dict = None) -> any:
+        """
+        Return the first item that matches the filters.
+        Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
+        :param items:
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
+        :return: The first item that matched the filters
+        """
+        for index, item in enumerate(items):
+            if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)}):
+                return item
+
+    def last(self, items: List[any], context: dict = None) -> any:
+        """
+        Return the last item that matches the filters.
+        Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
+        :param items:
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
+        :return: The last item that matched the filters
+        """
+        return self.first(items[::-1], context=context)
+
 
 if __name__ == "__main__":
     pass
