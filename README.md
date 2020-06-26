@@ -2,18 +2,16 @@
 
 >JTools is a robust library for interacting with JSON-like objects:
 >providing the ability to quickly query, format, and filter JSON-like data.
->
->JTools is available in Python and JavaScript
->
->There are three main components:
+
+>JTools is available in Python and JavaScript and consists of three main components:
 
 * `Query`: Extract and transform the values of nested fields.
-  * `Query("data.timestamp.$parse_timestamp.$attr('year')").many(items)`
+  * `Query("data.timestamp.$parse_timestamp.$time_part('year')").many(items)`
 * `Filter`: Combine the querying capabilities of `Query` with the ability
  to define filtering conditions to find just the elements you want.
-  * `Filter(Key("data.timestamp.$parse_timestamp.$attr('year')").gt(2015)).many(data)`
+  * `Filter(Key("data.timestamp.$parse_timestamp.$time_part('year')").gt(2015)).many(data)`
 * `Formatter`: Take multiple queries and format them into a string
-  * `Formatter("Item @data.id was released in @data.timestamp.$parse_timestamp.$call('year')").single(data[0])`
+  * `Formatter("Item @data.id was released in @data.timestamp.$parse_timestamp.$time_part('year')").single(data[0])`
 
 JTools exists in two different langauges with almost identical names and capabilities to allow you to move between the packages seamlessly. 
 
@@ -42,7 +40,11 @@ declaration files.
      can be nested in `()`.
      * Support for keyword arguments:`$index("value", fallback=12)`
      * Whitespace is allowed in a lot more places in a query now, which is very helpful in a language
-     like Python which has multi-line string.
+     like Python which has multi-line strings.
+   * Added functionality so that `Filter` values can be queries.
+     * Using JSON: `{ field: <field>, operator: <op>, value: { query: <value query> } }`
+     * Using `Key`: `Key(<field>).<op>(Key(<value_query>))`
+     * For example: `Key("tag.tag1").gt(Key("tag.tag2"))`
    * Many new specials
      * `$key_of_min_value` - Gets the key of the min value in an dict/map/object
      * `$key_of_max_value` - Gets the key of the max value in an dict/map/object
@@ -59,6 +61,10 @@ declaration files.
      when used in conjunction with `$map` to apply multiple specials at once. `pipeline` must be of format:
 ```
 [
+    <special>
+
+    OR
+
     [<special>, arg1, arg2, ..., (optional) map/object/dict of keyword arguments],
     ...
 ]
@@ -87,9 +93,10 @@ $index("balance").$range(1).$replace(old=",", new="").$float
   
 ## Glossary
  * [`Installation`](#installation)
+ * [`Quickstart`](#quickstart)
  * [`JQL`](#jql)
    * [`Arguments`](#arguments)
-     [`Math Operators`](#math-operators)
+   * [`Math Operators`](#math-operators)
  * [`Query`](#query)
    * [`Context`](#context)
    * [`Specials`](#specials)
@@ -114,6 +121,15 @@ from jtools import Query, Filter, Key, Condition, Formatter
 ```javascript
 // import
 import { Query, Filter, Key, Condition, Formatter } from "@blending_jake/jtools";
+```
+
+## Quickstart
+```python
+from jtools import Query
+# sort by nested timestamp field by month
+q = Query("meta.timestamp.$parse_timestamp.$time_part('month')")
+data = [ ... ]
+sorted_data = sorted(data, key=q.single)
 ```
 
 ## `JQL`
@@ -145,16 +161,16 @@ can be used to specify a specific argument to set the value for:
 what argument you are setting - improving readability, or can be used to skip arguments which
 have default values. 
 
-It is important to note that arguments, and the parenthesis surrounding them can be left
-completely off of a special if the default argument values are acceptable or there are no
-arguments - so a query like `data.$values.$max.$divide(@data.$values.$sum)` can be written
-where most of the parenthesis and arguments are just left off.
-
 For example, the index special has the following definition:
 `$index(key, fallback=null, extended=false)`. If you want to use a JQL query for `key`, then you need
 to set `extended=true`. You can either write `$index(key, null, true)`, or you can skip the 
 fallback argument and write `$index(key, extended=true)`. Using keyword arguments might not save many 
 characters if the the special has few arguments, but can still greatly improve readability.
+
+It is important to note that arguments, and the parenthesis surrounding them can be left
+completely off of a special if the default argument values are acceptable or there are no
+arguments - so a query like `data.$values.$max.$divide(@data.$values.$sum)` can be written
+where most of the parenthesis and arguments are just left off.
 
 ##### value
 Arguments are considered `values` and must be one of the following types.
@@ -242,11 +258,6 @@ Math expressions can be nested in other values, for example:
 >`Query([field, field, ...]).many(...) -> [[result, result, ...], [result, result, ...], ...]`
 
 ### Notes
- * Fields can be indexed after specials, so `$split.0` is completely valid
- 
- * You don't have to use `()` at the end of a special if there aren't any 
- arguments, or the default arguments are acceptable.
- 
  * More specials can be added by using the class method `.register_special()` 
  like so: `Query.register_special(<name>, <func>)`. The function should be formatted as such: 
   ```python
@@ -291,16 +302,11 @@ new Query("NOW.$subtract(@meta.timestamp).$divide(86400).$round.$suffix(' Days A
  
 #### Specials
 General
+  * `$inject(value: any) -> any`: Inject a value into the query
   * `$length -> int`
   * `$lookup(lookup: dict, fallback=null) -> any`: Lookup the current value in the provided map/dict 
-  * `$inject(value: any) -> any`: Inject a value into the query
-  * `$print -> any`: Print the current query value before continuing to pass that value along
   * `$store_as(name: string) -> any`: Store the current query value in the current context for later use in the query. This does not 
    change the underlying data being queried.
-  * `$group_by(key="", count=false) -> Dict[any: any[] | int]`: Take an incoming list and group the values 
-  by the specified key. Any valid JQL query can be used for the key, so `""` means the value itself. 
-  The result by default will be keys to a list of values. However, if `count=true`, then the result will be keys 
-  to the number of elements in that group.
   * `$pipeline(pipeline) -> any`: Take a value and run it through multiple specials. Can be used in conjunction
   with `$map` or `$value_map` to apply a series of transformations across a list of values. `pipeline` must
   be a list where each value is:
@@ -321,13 +327,19 @@ Query("""
     ])
 """)
 ```
+  * `$print -> any`: Print the current query value before continuing to pass that value along
   
-Maps/Objects
-  * `$keys -> List[any]`
-  * `$values -> List[any]`
+Dict/Maps/Objects
   * `$items -> List[[any, any]]`
-  * `$wildcard(nxt, just_field=true) -> List[any]`: On a given map or list, go through all values and see if `next` is
-  a defined field. If it is, then return just the value of `next` on that item, if `just_field=true`, or the entire 
+  * `$keys -> List[any]`
+  * `$key_of_max_value(just_key=true) -> any | [any, any]`: Find the key of the max value in a dict/object/map. If
+  `just_key=true`, then just the value of the key will be returned. Otherwise, the `[key, value`] will be
+  returned.
+  * `$key_of_min_value(just_key=true) -> any | [any, any]`: Find the key of the min value in a dict/object/map. If
+  `just_key=true`, then just the value of the key will be returned. Otherwise, the `[key, value`] will be
+  returned.
+  * `$wildcard(nxt, just_field=true) -> List[any]`: On a given map or list, go through all values and see if `nxt` is
+  a defined field. If it is, then return just the value of `nxt` on that item, if `just_field=true`, or the entire 
   item otherwise. This special allows a nested field to be extracted across multiple items where it it present. 
   For example: 
 ```python
@@ -350,6 +362,7 @@ let data = {
 new Query('$wildcard("tag")').single(data)  // => ["run", "to-do"]
 new Query('$wildcard("tag", false)').single(data) // => [{"tag": "run"}, {"tag": "to-do", "other": "task"}]
 ```
+ * `$values -> List[any]`
  * `$value_map(special, duplicate=true, *args, **kwargs): Dict[any: any]`: Go through the values on the current item in the query, applying a special
  to each one in-place. If `duplicate=true`, then the original value will not be modified. Similar to:
  ```python
@@ -363,32 +376,26 @@ Object.keys(value).forEach(key => {
     value[key] = SPECIALS[special](value[key], ...args, ...kwargs);
 });
  ```
-  * `$key_of_min_value(just_key=true) -> any | [any, any]`: Find the key of the min value in a dict/object/map. If
-  `just_key=true`, then just the value of the key will be returned. Otherwise, the `[key, value`] will be
-  returned.
-  * `$key_of_max_value(just_key=true) -> any | [any, any]`: Find the key of the max value in a dict/object/map. If
-  `just_key=true`, then just the value of the key will be returned. Otherwise, the `[key, value`] will be
-  returned.
   
 Type Conversions
-  * `$set -> set`
-  * `$float -> float`
-  * `$string -> str`
   * `$dict -> Dict[any: any]`: Take an incoming list of `(key, value)` pairs and make a map/dict/object out of them.
+  * `$fallback(fallback) -> value or fallback`: If the value is `null`, then it will be replaced with `fallback`.
+  * `$float -> float`
   * `$int -> int`
   * `$not -> bool`: Returns `not value` or `!value`
-  * `$fallback(fallback) -> value or fallback`: If the value is `null`, then it will be replaced with `fallback`.
+  * `$set -> set`
+  * `$string -> str`
   * `$ternary(if_true, if_false, strict=false) -> any`: Return `if_true` if the value is `truish`, otherwise,
   return `if_false`. Pass `true` for `strict` if the value must be `true` and not just `truish`.
   
 Datetime 
   * `$parse_timestamp -> datetime or moment`: Take a Unix timestamp in seconds and return a corresponding datetime/moment object
+  * `$strftime(fmt="%Y-%m-%dT%H:%M:%SZ" or "YYYY-MM-DD[T]HH:mm:ss[Z]") -> string`: Format a datetime/moment object as a string using `fmt`. Refer to [datetime](#https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior) or 
+  [moment](#https://momentjs.com/docs/#/parsing/string-format/) for formatting instructions
   * `$strptime(fmt=null) -> datetime or moment`: Parse a datetime string and return a corresponding datetime/moment object.
   If `fmt=None`, then standard formats will be tried. Refer to [datetime](#https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior) or 
   [moment](#https://momentjs.com/docs/#/parsing/string-format/) for formatting instructions
   * `$timestamp -> int`: Dump a datetime/moment object to a UTC timestamp as the number of seconds since the Unix Epoch
-  * `$strftime(fmt="%Y-%m-%dT%H:%M:%SZ" or "YYYY-MM-DD[T]HH:mm:ss[Z]") -> string`: Format a datetime/moment object as a string using `fmt`. Refer to [datetime](#https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior) or 
-  [moment](#https://momentjs.com/docs/#/parsing/string-format/) for formatting instructions
   * `$time_part(part) -> int`: Take a `datetime` or `moment` value and get a specific part of
   the date. `part` can be:
     * `millisecond`
@@ -402,54 +409,60 @@ Datetime
     * `dayOfYear`
   
 Math / Numbers
-  * `$add(num) -> number`
-  * `$subtract(num) -> number`
-  * `$multiply(num) -> number`
-  * `$divide(num) -> number`
-  * `$pow(num) -> number`
   * `$abs(num) -> number`
-  * `$distance(other) -> float`: Euler distance in N-dimensions
-  * `$math(attr, ...args) -> any`: Returns `math[attr](value, ...args)`, which can be used for
-  operations like `floor`, `cos`, `sin`, `min`, etc.
-  * `$round(n=2) -> number`
+  * `$add(num) -> number`
   * `$arith(op, arg_value) -> number`: Take the value and use it as the first operand of an
   expression with the specified math operator. `op` can be any of the [math operators](#math-operators).
   The expression will be `value op arg_value`. 
+  * `$distance(other) -> float`: Euler distance in N-dimensions
+  * `$divide(num) -> number`
+  * `$math(attr, ...args) -> any`: Returns `math[attr](value, ...args)`, which can be used for
+  operations like `floor`, `cos`, `sin`, `min`, etc. See the [Python Docs](#https://docs.python.org/3/library/math.html) 
+  for valid `attr` values in Python and the [JavaScript Docs](#https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math) 
+  for valid `attr` values in JavaScript.
+  * `$multiply(num) -> number`
+  * `$pow(num) -> number`
+  * `$round(n=2) -> number`
+  * `$subtract(num) -> number`
   
 Strings
   * `$lowercase -> string`
-  * `$uppercase -> string`
-  * `$titlecase -> string`
   * `$prefix(prefix) -> string`: Prefix the value with the specified string
-  * `$suffix(suffix) -> string`: Concatenate a string to the end of the value
-  * `$wrap(prefix, suffix) -> string`: Wrap a string with a prefix and suffix. Combines features of above two specials.
-  * `$strip -> string`: Strip leading and trailing whitespace
   * `$replace(old, new) -> string`: Replace all occurrences of a string 
-  * `$trim(length=50, suffix="...") -> string`: Trim the length of a string
   * `$split(on=" ") -> List[string]`: Split a string
+  * `$strip -> string`: Strip leading and trailing whitespace
+  * `$suffix(suffix) -> string`: Concatenate a string to the end of the value
+  * `$titlecase -> string`
+  * `$trim(length=50, suffix="...") -> string`: Trim the length of a string
+  * `$wrap(prefix, suffix) -> string`: Wrap a string with a prefix and suffix. Combines features of above two specials.
+  * `$uppercase -> string`
   
 Lists
-  * `$min -> number`: Find the min value in the list
-  * `$max -> number`: Find the max value in the list
-  * `$sum -> number`: Return the sum of the items in the value
-  * `$join(sep=", ") -> string`: Join a list using the specified separator
-  * `$join_arg(arg: List[any], sep=", ")`: Similar to `$join` except this operates on an argument instead of the query value.
-  Essentially a shortened form of `$inject(arg).$join(sep)`.
+  * `$group_by(key="", count=false) -> Dict[any: any[] | int]`: Take an incoming list and group the values 
+  by the specified key. Any valid JQL query or integer can be used for the key. `""` means the value itself. 
+  The result by default will be keys to a list of values. However, if `count=true`, then the result will be keys 
+  to the number of elements in that group.
   * `$index(key, fallback=null, extended=false) -> any`: Index the current piece of data either using
   a string or index key, or a full JQL query if `extended=true`. If the index is invalid, then `fallback` will
   be returned. If `extended=false` and `key` is an integer, then a negative key can be used to index from the
   end of the array.
-  * `$range(start, end=null) -> List[any]`: Get a sublist. Defaults to `value.slice(start)`, 
-  but an end value can be specified. Negative indices are allowed. 
-  * `$remove_nulls -> List[any]`: Remove any values that are `None` if Python, or `null` and `undefined` if JavaScript
-  * `$sort(key="", reverse=false) -> List[any]`: Sort an incoming list of values by a given key which can be any valid JQL query.
-  By default, `key=""` means the top-level value will be sorted on.
+  * `$join(sep=", ") -> string`: Join a list using the specified separator
+  * `$join_arg(arg: List[any], sep=", ")`: Similar to `$join` except this operates on an argument instead of the query value.
+  Essentially a shortened form of `$inject(arg).$join(sep)`.
   * `$map(special, *args, **kwargs) -> List[any]`: Apply `special` to every element in the 
   value. Arguments can be passed through to the special being used.
+  * `$max -> number`: Find the max value in the list
+  * `$min -> number`: Find the min value in the list
+  * `$sum -> number`: Return the sum of the items in the value
+  * `$range(start, end=null) -> List[any]`: Get a sublist. Defaults to `value.slice(start)` or `value[start:]`, 
+  but an end value can be specified. Negative indices are allowed. 
+  * `$remove_nulls -> List[any]`: Remove any values that are `None` if Python, or `null` and `undefined` if JavaScript
+  * `$sort(key="", reverse=false) -> List[any]`: Sort an incoming list of values by a given key which can be any valid JQL query
+  or an integer. By default, `key=""` means the top-level value will be sorted on.
   
  Attributes
-  * `$call(func, *args, **kwargs) -> any`: Call a function that is on the current value, implemented as `getattr(value, func)(*args)` and `value[func](...args)`
   * `$attr(attr) -> any`: Access an attribute of the given object, implemented as `getattr(value, attr)` and `value[attr]`
+  * `$call(func, *args, **kwargs) -> any`: Call a function that is on the current value, implemented as `getattr(value, func)(*args)` and `value[func](...args)`
 
 
 ## Filter
@@ -467,10 +480,6 @@ Lists
 
     OR
 
-    {"field": <field>, "operator": <op>, "value": { "query": <JQL query>}},
-
-    OR
-
     {"or": <nested outer structure>},
     
     OR
@@ -481,7 +490,8 @@ Lists
 ]
 <field>: any valid `JQL` query
 <op>: See list below
-<value>: Anything that makes sense for the operator
+<value>: Any valid value for the operator, or 
+    { "query": <JQL query> } to have a value which is a query
 ``` 
  * `convert_ints`: `bool` Corresponds with the argument with the same name in `Query`. Determines
  whether digit only fields are treated as integers or strings. Defaults to `true`.
@@ -543,7 +553,7 @@ Operators:
 >For example: `Key("meta.id").eq(12)` is the same as `Key("meta.id") == 12`,
 >which is the same as `{"field": "meta.id", "operator": "==", "value": 12}`.
 
->To use a filter where the value is a query itself, use `Key(<field>` as the value.
+>To use a filter where the value is a query itself, use `Key(<field>)` as the value.
 >For example: `Key("tags.tag1").gt(Key("tag.tag2"))`.
 
 >The table below describes all of the functions which map to the underlying conditions. 
@@ -603,7 +613,7 @@ Operators:
 ##### `.or_(*conditions)`
 >OR the current condition with multiple other conditions
 
-##### `.not_(*conditions)`
+##### `.not_()`
 >NOT the current condition
 
 ##### `.clone(deep=false)`

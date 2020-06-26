@@ -13,23 +13,6 @@ logger.setLevel(environ.get("JTOOLS_LOGGING_LEVEL", "WARNING"))
 __all__ = ["Query", "SpecialNotFoundError"]
 
 
-def parse_dt_string(value, fmt=None):
-    if fmt is None:
-        return parse(value)
-    else:
-        return datetime.strptime(value, fmt)
-
-
-def print_return(value, *, context):
-    print(value)
-    return value
-
-
-def store_as(value, name, *, context):
-    context[name] = value
-    return value
-
-
 def group_by(value, key: Union[str, int] = "", count=False, *, context) -> Dict[any, Union[List[any], int]]:
     """
     Group the incoming values
@@ -67,76 +50,6 @@ def group_by(value, key: Union[str, int] = "", count=False, *, context) -> Dict[
     return out
 
 
-def wildcard(value: dict, nxt: Union[str, int], just_field=True, *, context):
-    out = []
-    for v in value.values():
-        if (isinstance(v, dict) and nxt in v) or (
-                # check if this object has the ability to get a specific index
-                not isinstance(v, dict) and isinstance(nxt, int) and getattr(
-                v, "__getitem__", None) is not None and 0 <= nxt < len(v)
-        ):
-            if just_field:
-                out.append(v[nxt])
-            else:
-                out.append(v)
-
-    return out
-
-
-def value_map(value, special: str, *args, duplicate=True, context, **kwargs):
-    real_value = {**value} if duplicate else value
-
-    for key in real_value:
-        real_value[key] = Query.SPECIALS[special](value[key], *args, **kwargs, context=context)
-
-    return real_value
-
-
-def key_of_min_value(value, just_key=True, *, context):
-    key = None
-    for k, v in value.items():
-        if key is None or v < value[key]:
-            key = k
-
-    if just_key:
-        return key
-    else:
-        return key, value[key]
-
-
-def key_of_max_value(value, just_key=True, *, context):
-    key = None
-    for k, v in value.items():
-        if key is None or v > value[key]:
-            key = k
-
-    if just_key:
-        return key
-    else:
-        return key, value[key]
-
-
-def time_part(value: datetime, part, *, context):
-    if part == "millisecond":
-        return int(value.microsecond / 1000)
-    elif part == "second":
-        return value.second
-    elif part == "minute":
-        return value.minute
-    elif part == "hour":
-        return value.hour
-    elif part == "day":
-        return value.day
-    elif part == "month":
-        return value.month
-    elif part == "year":
-        return value.year
-    elif part == "dayOfWeek":
-        return value.weekday()
-    elif part == "dayOfYear":
-        return value.timetuple().tm_yday
-
-
 def index_special(value, key: Union[int, str, List[Union[str, int]]], fallback=None, extended=False, *, context):
     multiple = isinstance(key, list)
 
@@ -166,25 +79,40 @@ def index_special(value, key: Union[int, str, List[Union[str, int]]], fallback=N
         return out if multiple else out[0]
 
 
-def sort(value, key: Union[str, int] = "", reverse=False, *, context) -> list:
-    """
-    Sort the value by the specified key
-    :param value:
-    :param key: The key to sort by, any valid JQL query, or "", to just sort based on the top-level values
-    :param reverse: Whether to reverse the sorting or not
-    :param context:
-    :return:
-    """
-    if isinstance(key, int):
-        return sorted(value, key=lambda x: x[key], reverse=reverse)
-    else:
-        if key in QUERY_CACHE:
-            query = QUERY_CACHE[key]
-        else:
-            query = Query(key)
-            QUERY_CACHE[key] = query
+def key_of_max_value(value, just_key=True, *, context):
+    key = None
+    for k, v in value.items():
+        if key is None or v > value[key]:
+            key = k
 
-        return sorted(value, key=query.single, reverse=reverse)
+    if just_key:
+        return key
+    else:
+        return key, value[key]
+
+
+def key_of_min_value(value, just_key=True, *, context):
+    key = None
+    for k, v in value.items():
+        if key is None or v < value[key]:
+            key = k
+
+    if just_key:
+        return key
+    else:
+        return key, value[key]
+
+
+def parse_dt_string(value, fmt=None):
+    if fmt is None:
+        return parse(value)
+    else:
+        return datetime.strptime(value, fmt)
+
+
+def print_return(value, *, context):
+    print(value)
+    return value
 
 
 def special_pipeline(
@@ -211,6 +139,78 @@ def special_pipeline(
             local_value = Query.SPECIALS[stage[0]](local_value, *stage[1:], context=context)
 
     return local_value
+
+
+def sort(value, key: Union[str, int] = "", reverse=False, *, context) -> list:
+    """
+    Sort the value by the specified key
+    :param value:
+    :param key: The key to sort by, any valid JQL query, or "", to just sort based on the top-level values
+    :param reverse: Whether to reverse the sorting or not
+    :param context:
+    :return:
+    """
+    if isinstance(key, int):
+        return sorted(value, key=lambda x: x[key], reverse=reverse)
+    else:
+        if key in QUERY_CACHE:
+            query = QUERY_CACHE[key]
+        else:
+            query = Query(key)
+            QUERY_CACHE[key] = query
+
+        return sorted(value, key=query.single, reverse=reverse)
+
+
+def store_as(value, name, *, context):
+    context[name] = value
+    return value
+
+
+def time_part(value: datetime, part, *, context):
+    if part == "millisecond":
+        return int(value.microsecond / 1000)
+    elif part == "second":
+        return value.second
+    elif part == "minute":
+        return value.minute
+    elif part == "hour":
+        return value.hour
+    elif part == "day":
+        return value.day
+    elif part == "month":
+        return value.month
+    elif part == "year":
+        return value.year
+    elif part == "dayOfWeek":
+        return value.weekday()
+    elif part == "dayOfYear":
+        return value.timetuple().tm_yday
+
+
+def wildcard(value: dict, nxt: Union[str, int], just_field=True, *, context):
+    out = []
+    for v in value.values():
+        if (isinstance(v, dict) and nxt in v) or (
+                # check if this object has the ability to get a specific index
+                not isinstance(v, dict) and isinstance(nxt, int) and getattr(
+                v, "__getitem__", None) is not None and 0 <= nxt < len(v)
+        ):
+            if just_field:
+                out.append(v[nxt])
+            else:
+                out.append(v)
+
+    return out
+
+
+def value_map(value, special: str, *args, duplicate=True, context, **kwargs):
+    real_value = {**value} if duplicate else value
+
+    for key in real_value:
+        real_value[key] = Query.SPECIALS[special](value[key], *args, **kwargs, context=context)
+
+    return real_value
 
 
 class Query:
