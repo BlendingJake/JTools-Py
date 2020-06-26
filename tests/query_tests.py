@@ -2,9 +2,11 @@ import unittest
 import sys
 import json
 import datetime
+from io import StringIO
 from pathlib import Path
 from ezdict import EZDict
 from random import randint
+from contextlib import redirect_stdout
 
 sys.path.append("../")
 
@@ -134,6 +136,12 @@ class TestGetter(unittest.TestCase):
             Query('balance.$range(1).$replace(",", "").$float').single(small_data[0])
         )
 
+    def test_math_args(self):
+        data = EZDict({"a": 4, "b": -4, "c": 2.5, "d": [3, 4], "e": 0, "pi": 3.1415926})
+        self.assertEqual(data.a / (data.b + data.c) - data.pi, Query("$inject(@a / (@b + @c) - @pi)").single(data))
+        self.assertEqual(data.a + data.b * data.c ** data.e, Query("$inject(@a + @b * @c ** @e)").single(data))
+        self.assertEqual((data.a + data.b) * data.c ** data.e, Query("$inject((@a + @b) * @c ** @e)").single(data))
+
     # GENERAL
     def test_special_length_string(self):
         self.assertEqual(
@@ -166,6 +174,23 @@ class TestGetter(unittest.TestCase):
             "missing",
             Query(f'field.$lookup({json.dumps(data)}, "missing")').single({"field": "c"})
         )
+
+    def test_print(self):
+        buffer = StringIO()
+        with redirect_stdout(buffer):
+            Query("$inject('message').$print").single({})
+
+        self.assertEqual("message", buffer.getvalue().strip())
+
+    def test_keyword_args(self):
+        data = small_data[0]
+        self.assertEqual(data["balance"], Query("$index('balance')").single(data))
+        self.assertEqual(None, Query("$index('nope')").single(data))
+        self.assertEqual('nope', Query("$index('nope', 'nope')").single(data))
+        self.assertEqual('nope', Query("$index('nope', fallback='nope')").single(data))
+        self.assertEqual(data["tags"][0], Query("$index('tags.0', extended=true, fallback='nope')").single(data))
+        # Do again to check caching
+        self.assertEqual(data["tags"][0], Query("$index('tags.0', extended=true, fallback='nope')").single(data))
 
     # DICT
     def test_special_keys(self):
@@ -215,6 +240,25 @@ class TestGetter(unittest.TestCase):
             [data["e"], data["g"]],
             Query('$wildcard(0, false)').single(data)
         )
+
+    def test_key_of(self):
+        data = {randint(0, 100): i for i in range(10)}
+        min_, max_ = None, None
+        for k, v in data.items():
+            if min_ is None:
+                min_ = k
+            elif data[k] < data[min_]:
+                min_ = k
+
+            if max_ is None:
+                max_ = k
+            elif data[k] > data[max_]:
+                max_ = k
+
+        self.assertEqual(max_, Query("$key_of_max_value").single(data))
+        self.assertEqual((max_, data[max_]), Query("$key_of_max_value(just_key=false)").single(data))
+        self.assertEqual(min_, Query("$key_of_min_value").single(data))
+        self.assertEqual((min_, data[min_]), Query("$key_of_min_value(just_key=false)").single(data))
 
     # TYPE CONVERSIONS
     def test_special_fallback(self):
@@ -302,6 +346,18 @@ class TestGetter(unittest.TestCase):
             Query('dt.$strptime.$strftime("%I:%M %p on %B %d, %Y")').single({"dt": "4/3/1978 5:25 PM"})
         )
 
+    def test_time_part(self):
+        dt = "2020-05-23T10:11:12.123+00:00"
+        self.assertEqual(2020, Query("$strptime.$time_part('year')").single(dt))
+        self.assertEqual(5, Query("$strptime.$time_part('month')").single(dt))
+        self.assertEqual(23, Query("$strptime.$time_part('day')").single(dt))
+        self.assertEqual(10, Query("$strptime.$time_part('hour')").single(dt))
+        self.assertEqual(11, Query("$strptime.$time_part('minute')").single(dt))
+        self.assertEqual(12, Query("$strptime.$time_part('second')").single(dt))
+        self.assertEqual(123, Query("$strptime.$time_part('millisecond')").single(dt))
+        self.assertEqual(5, Query("$strptime.$time_part('dayOfWeek')").single(dt))
+        self.assertEqual(144, Query("$strptime.$time_part('dayOfYear')").single(dt))
+
     def test_special_arithmetic(self):
         data = {"a": 4, "b": -4, "c": 2.5, "d": [3, 4], "e": 0, "pi": 3.1415926}
         self.assertEqual(6, Query("a.$add(2)").single(data))
@@ -315,6 +371,21 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(1.0, Query('e.$math("cos")').single(data))
         self.assertEqual(3.14, Query('pi.$round').single(data))
         self.assertEqual(3.1416, Query('pi.$round(4)').single(data))
+
+    def test_arith_basic(self):
+        data = EZDict({"a": 4, "b": -4, "c": 2.5, "d": [3, 4], "e": 0, "pi": 3.1415926})
+        self.assertEqual(data.a + data.b + data.c, Query("a.$arith('+', @b + @c)").single(data))
+        self.assertEqual(data.a + data.b - data.c, Query("a.$arith('+', @b - @c)").single(data))
+        self.assertEqual(data.a + data.b * data.c, Query("a.$arith('+', @b * @c)").single(data))
+        self.assertEqual(data.a + data.b / data.c, Query("a.$arith('+', @b / @c)").single(data))
+        self.assertEqual(data.a + data.b ** data.c, Query("a.$arith('+', @b ** @c)").single(data))
+        self.assertEqual(data.a + data.b // data.c, Query("a.$arith('+', @b // @c)").single(data))
+        self.assertEqual(data.a + data.b % data.c, Query("a.$arith('+', @b % @c)").single(data))
+
+    def test_min_max(self):
+        data = [randint(0, 100) for _ in range(100)]
+        self.assertEqual(min(data), Query("$min").single(data))
+        self.assertEqual(max(data), Query("$max").single(data))
 
     def test_special_string(self):
         self.assertEqual(
@@ -348,6 +419,12 @@ class TestGetter(unittest.TestCase):
             Query('guid.$split("-")').single(small_data[0])
         )
 
+    def test_string_cases(self):
+        item = "here IS sOmEtHiNg"
+        self.assertEqual(item.upper(), Query("$uppercase").single(item))
+        self.assertEqual(item.lower(), Query("$lowercase").single(item))
+        self.assertEqual(item.title(), Query("$titlecase").single(item))
+
     def test_special_list(self):
         data = {
             "a": [43.2, -34, 54.2],
@@ -357,7 +434,7 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(", ".join(str(i) for i in data["a"]), Query("a.$join").single(data))
         self.assertEqual(", ".join(str(i) for i in data["a"]), Query("$join_arg(@a)").single(data))
         self.assertEqual(data["a"][2], Query("a.$index(2)").single(data))
-        self.assertEqual("nope", Query("a.$index(5, 'nope')").single(data))
+        self.assertEqual("nope", Query("a.$index(5, fallback='nope')").single(data))
         self.assertEqual(data["a"][1:], Query("a.$range(1)").single(data))
         self.assertEqual(data["a"][1:-1], Query("a.$range(1, -1)").single(data))
         self.assertEqual([d for d in data["b"] if d is not None], Query("b.$remove_nulls").single(data))
@@ -517,6 +594,17 @@ class TestGetter(unittest.TestCase):
 
         self.assertEqual(ez, Query("$group_by").single(l))
 
+    def test_group_by_number(self):
+        data = [[i, i] for i in range(10)]
+        ez = EZDict()
+        for item in data:
+            ez.appender(item[0], item)
+
+        self.assertEqual(
+            ez,
+            Query("$group_by(0)").single(data)
+        )
+
     def test_group_by_nested(self):
         ez = EZDict()
         for item in small_data:
@@ -534,6 +622,13 @@ class TestGetter(unittest.TestCase):
     def test_sort_flat(self):
         items = [randint(0, 100) for i in range(10)]
         self.assertEqual(sorted(items), Query("$sort").single(items))
+
+    def test_sort_number(self):
+        data = {randint(0, 100): i for i in range(10)}
+        self.assertEqual(
+            sorted(data.items(), key=lambda x: x[0]),
+            Query("$sort(0)").single(list(data.items()))
+        )
 
     def test_sort_age(self):
         self.assertEqual(
@@ -580,6 +675,27 @@ class TestGetter(unittest.TestCase):
             5,
             Query("overlapping").single({"overlapping": 5}, {"overlapping": "nope"})
         )
+
+    def test_pipeline(self):
+        min_ = min([float(item["balance"][1:].replace(",", "")) for item in small_data])
+        self.assertEqual(
+            min_,
+            Query("""
+                $map(
+                    'pipeline',
+                    [
+                        ['index', 'balance'],
+                        ['range', 1],
+                        ['replace', {'old': ',', 'new': ''}],
+                        ['float']
+                    ]
+                ).$min
+            """).single(small_data)
+        )
+
+    def test_bad_query(self):
+        result = Query("$length(4*5").single({})
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

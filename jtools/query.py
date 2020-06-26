@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 import math
 from os import environ
 from dateutil.parser import parse
-from .filter import Filter
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -21,84 +20,9 @@ def parse_dt_string(value, fmt=None):
         return datetime.strptime(value, fmt)
 
 
-def wildcard(value: dict, nxt: Union[str, int], just_field=True):
-    out = []
-    for v in value.values():
-        if (isinstance(v, dict) and nxt in v) or (
-                # check if this object has the ability to get a specific index
-                not isinstance(v, dict) and isinstance(nxt, int) and getattr(
-                v, "__getitem__", None) is not None and 0 <= nxt < len(v)
-        ):
-            if just_field:
-                out.append(v[nxt])
-            else:
-                out.append(v)
-
-    return out
-
-
-def value_map(value, special: str, duplicate=True, *args, context):
-    real_value = {**value} if duplicate else value
-
-    for key in real_value:
-        real_value[key] = Query.SPECIALS[special](value[key], *args, context=context)
-
-    return real_value
-
-
 def print_return(value, *, context):
     print(value)
     return value
-
-
-def index_special(value, i: Union[int, str, List[Union[str, int]]], extended=False, fallback=None, *, context):
-    multiple = isinstance(i, list)
-
-    if extended:
-        key = str(i) + str(fallback)
-        if key in QUERY_CACHE:
-            query = QUERY_CACHE[key]
-        else:
-            query = Query(
-                [str(x) for x in i] if multiple else str(i),
-                fallback=fallback
-            )
-            QUERY_CACHE[key] = query
-
-        return query.single(value, context=context)
-    else:
-        out = []
-        for x in (i if multiple else [i]):
-            try:
-                out.append(value[x])
-            except (IndexError, KeyError, TypeError):
-                try:
-                    out.append(context[x])
-                except (IndexError, KeyError, TypeError):
-                    out.append(fallback)
-
-        return out if multiple else out[0]
-
-
-def filter_special(value, *args, single=True, context):
-    if len(args) == 3:
-        f = [{"field": args[0], "operator": args[1], "value": args[2]}]
-    elif isinstance(args[0], dict):
-        f = [args[0]]
-    else:
-        f = args[0]
-
-    key = str(f)
-    if key in FILTER_CACHE:
-        filterer = FILTER_CACHE[key]
-    else:
-        filterer = Filter(f)
-        FILTER_CACHE[key] = filterer
-
-    if single:
-        return filterer.single(value, context=context)
-    else:
-        return filterer.many(value, context=context)
 
 
 def store_as(value, name, *, context):
@@ -143,30 +67,34 @@ def group_by(value, key: Union[str, int] = "", count=False, *, context) -> Dict[
     return out
 
 
-def sort(value, key: Union[str, int] = "", reverse=False, *, context) -> list:
-    """
-    Sort the value by the specified key
-    :param value:
-    :param key: The key to sort by, any valid JQL query, or "", to just sort based on the top-level values
-    :param reverse: Whether to reverse the sorting or not
-    :param context:
-    :return:
-    """
-    if isinstance(key, int):
-        return sorted(value, key=lambda x: x[key], reverse=reverse)
-    else:
-        if key in QUERY_CACHE:
-            query = QUERY_CACHE[key]
-        else:
-            query = Query(key)
-            QUERY_CACHE[key] = query
+def wildcard(value: dict, nxt: Union[str, int], just_field=True, *, context):
+    out = []
+    for v in value.values():
+        if (isinstance(v, dict) and nxt in v) or (
+                # check if this object has the ability to get a specific index
+                not isinstance(v, dict) and isinstance(nxt, int) and getattr(
+                v, "__getitem__", None) is not None and 0 <= nxt < len(v)
+        ):
+            if just_field:
+                out.append(v[nxt])
+            else:
+                out.append(v)
 
-        return sorted(value, key=query.single, reverse=reverse)
+    return out
+
+
+def value_map(value, special: str, *args, duplicate=True, context, **kwargs):
+    real_value = {**value} if duplicate else value
+
+    for key in real_value:
+        real_value[key] = Query.SPECIALS[special](value[key], *args, **kwargs, context=context)
+
+    return real_value
 
 
 def key_of_min_value(value, just_key=True, *, context):
     key = None
-    for k, v in value:
+    for k, v in value.items():
         if key is None or v < value[key]:
             key = k
 
@@ -178,7 +106,7 @@ def key_of_min_value(value, just_key=True, *, context):
 
 def key_of_max_value(value, just_key=True, *, context):
     key = None
-    for k, v in value:
+    for k, v in value.items():
         if key is None or v > value[key]:
             key = k
 
@@ -209,9 +137,59 @@ def time_part(value: datetime, part, *, context):
         return value.timetuple().tm_yday
 
 
+def index_special(value, key: Union[int, str, List[Union[str, int]]], fallback=None, extended=False, *, context):
+    multiple = isinstance(key, list)
+
+    if extended:
+        query_key = str(key) + str(fallback)
+        if query_key in QUERY_CACHE:
+            query = QUERY_CACHE[query_key]
+        else:
+            query = Query(
+                [str(x) for x in key] if multiple else str(key),
+                fallback=fallback
+            )
+            QUERY_CACHE[query_key] = query
+
+        return query.single(value, context=context)
+    else:
+        out = []
+        for x in (key if multiple else [key]):
+            try:
+                out.append(value[x])
+            except (IndexError, KeyError, TypeError):
+                try:
+                    out.append(context[x])
+                except (IndexError, KeyError, TypeError):
+                    out.append(fallback)
+
+        return out if multiple else out[0]
+
+
+def sort(value, key: Union[str, int] = "", reverse=False, *, context) -> list:
+    """
+    Sort the value by the specified key
+    :param value:
+    :param key: The key to sort by, any valid JQL query, or "", to just sort based on the top-level values
+    :param reverse: Whether to reverse the sorting or not
+    :param context:
+    :return:
+    """
+    if isinstance(key, int):
+        return sorted(value, key=lambda x: x[key], reverse=reverse)
+    else:
+        if key in QUERY_CACHE:
+            query = QUERY_CACHE[key]
+        else:
+            query = Query(key)
+            QUERY_CACHE[key] = query
+
+        return sorted(value, key=query.single, reverse=reverse)
+
+
 def special_pipeline(
         value,
-        pipeline: List[Union[str, Tuple[str, list], Tuple[str, list, dict], Tuple[str, dict]]],
+        pipeline,
         *, context):
     """
     Take a value and map it through multiple specials
@@ -251,18 +229,19 @@ class Query:
     SPECIALS: Dict[str, Callable] = {
         # general
         "length": lambda value, *, context: len(value),
-        "lookup": lambda value, mp, fallback=None, *, context: mp.get(value, fallback),
+        "lookup": lambda value, lookup, fallback=None, *, context: lookup.get(value, fallback),
         "inject": lambda _, value, *, context: value,
         "print": print_return,
         "store_as": store_as,
         "group_by": group_by,
+        "pipeline": special_pipeline,
 
         # dict
         "keys": lambda value, *, context: list(value.keys()),
         "values": lambda value, *, context: list(value.values()),
         "items": lambda value, *, context: list(value.items()),
-        "wildcard": lambda value, nxt, just_field=True, *, context: wildcard(value, nxt, just_field),
-        "value_map": lambda *args, **kwargs: value_map(*args, **kwargs),
+        "wildcard": wildcard,
+        "value_map": value_map,
         "key_of_min_value": key_of_min_value,
         "key_of_max_value": key_of_max_value,
 
@@ -295,8 +274,6 @@ class Query:
         "math": lambda value, attr, *args, context: getattr(math, attr)(value, *args),
         "round": lambda value, n=2, *, context: round(float(value), n),
         "arith": lambda value, op, arg_value, *, context: Query.MATH_OPERATIONS[op](value, arg_value),
-        "min": lambda value, *, context: min(value),
-        "max": lambda value, *, context: max(value),
 
         # string
         "lowercase": lambda value, context: value.lower(),
@@ -313,6 +290,8 @@ class Query:
         "split": lambda value, on=" ", *, context: value.split(on),
 
         # list
+        "min": lambda value, *, context: min(value),
+        "max": lambda value, *, context: max(value),
         "sum": lambda value, *, context: sum(value),
         "join": lambda value, sep=", ", *, context: sep.join(str(i) for i in value),
         "join_arg": lambda _, arg, sep=', ', *, context: sep.join(str(i) for i in arg),
@@ -322,13 +301,12 @@ class Query:
         "sort": sort,
 
         # attribute accessing
-        "call": lambda value, func, *args, context: getattr(value, func)(*args),
+        "call": lambda value, func, *args, context, **kwargs: getattr(value, func)(*args, **kwargs),
         "attr": lambda value, attr, *, context: getattr(value, attr),
-        "pipeline": special_pipeline
     }
 
-    SPECIALS["map"] = lambda value, special, *args, context: [
-        Query.SPECIALS[special](v, *args, context=context) for v in value
+    SPECIALS["map"] = lambda value, special, *args, context, **kwargs: [
+        Query.SPECIALS[special](v, *args, **kwargs, context=context) for v in value
     ]
 
     def __init__(self,
@@ -423,7 +401,7 @@ class Query:
         else:
             return qve.value
 
-    def single(self, item: Union[list, dict], context: dict = None) -> Union[Any, List[Any]]:
+    def single(self, item: Any, context: dict = None) -> Union[Any, List[Any]]:
         """
         Query the item
         :param item: The item to query
@@ -440,7 +418,7 @@ class Query:
 
         return values if self.multiple else values[0]
 
-    def many(self, items: List[Union[list, dict]], context: dict = None) -> Union[List[Any], List[List[Any]]]:
+    def many(self, items: List[Any], context: dict = None) -> Union[List[Any], List[List[Any]]]:
         """
         Query the items
         :param items: The items to query
@@ -473,7 +451,6 @@ class SpecialNotFoundError(Exception):
 
 
 QUERY_CACHE: Dict[str, Query] = {}
-FILTER_CACHE: Dict[str, Filter] = {}
 
 
 if __name__ == "__main__":

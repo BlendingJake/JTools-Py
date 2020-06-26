@@ -49,6 +49,9 @@ class TestFormatter(unittest.TestCase):
             Formatter("@a.$index(@index, '<missing>')").single({"a": [1, 2]})
         )
 
+    def test_nested_fallback(self):
+        self.assertEqual("5", Formatter("@missing.something.$fallback(5)").single({}))
+
     def test_nested_number(self):
         self.assertEqual(
             "Balance: $750",

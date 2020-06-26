@@ -1,5 +1,7 @@
 from typing import Type
 from antlr4 import *
+from antlr4.IntervalSet import IntervalSet
+from antlr4.Token import CommonToken
 from antlr4.error.ErrorStrategy import DefaultErrorStrategy
 from antlr4.error.Errors import InputMismatchException
 from .JQLLexer import JQLLexer
@@ -199,14 +201,21 @@ class JQLMultiQueryListener(JQLQueryListener):
 
 
 class JQLParseError(Exception):
-    def __init__(self, e, got, expected):
-        super().__init__(f"JQL parse error. Got {repr(got)}, expected {repr(expected)}")
+    def __init__(self, got: CommonToken, expected: str):
+        super().__init__(f"JQL Parse Error. Got '{got.text}', expected {expected}")
 
 
 class JQLErrorStrategy(DefaultErrorStrategy):
+    def __init__(self, lexer: JQLLexer):
+        super().__init__()
+        self.lexer = lexer
+
     def reportError(self, recognizer: Parser, e: RecognitionException):
         if isinstance(e, InputMismatchException):
-            raise JQLParseError(str(e), e.offendingToken, e.getExpectedTokens())
+            raise JQLParseError(
+                e.offendingToken,
+                e.getExpectedTokens().toString(self.lexer.literalNames, self.lexer.symbolicNames)
+            )
         else:
             super().reportError(recognizer, e)
 
@@ -220,7 +229,7 @@ class Builder:
         self.lexer = JQLLexer(self.input_stream)
         self.stream = CommonTokenStream(self.lexer)
         self.parser = JQLParser(self.stream)
-        self.parser._errHandler = JQLErrorStrategy()
+        self.parser._errHandler = JQLErrorStrategy(self.lexer)
 
 
 class JQLQueryBuilder(Builder):

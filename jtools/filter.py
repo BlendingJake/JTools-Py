@@ -20,11 +20,14 @@ class Condition:
     def __repr__(self):
         return str(self.output)
 
-    def __and__(self, other):
+    def __eq__(self, other):
+        return isinstance(other, Condition) and other.output == self.output
+
+    def __and__(self, other) -> 'Condition':
         self.output.extend(other.output)
         return self
 
-    def and_(self, *args):
+    def and_(self, *args) -> 'Condition':
         val = self
         for a in args:
             val = val & a
@@ -32,10 +35,10 @@ class Condition:
         return val
 
     @staticmethod
-    def ander(cond1, cond2, *conditions):
+    def ander(cond1, cond2, *conditions) -> 'Condition':
         return cond1.clone().and_(cond2, *conditions)
 
-    def __or__(self, other):
+    def __or__(self, other) -> 'Condition':
         t = []
         for l in (self, other):
             if len(l.output) == 1:
@@ -49,7 +52,7 @@ class Condition:
         self.output = [{"or": t}]
         return self
 
-    def or_(self, *args):
+    def or_(self, *args) -> 'Condition':
         val = self
         for a in args:
             val = val | a
@@ -57,29 +60,29 @@ class Condition:
         return val
 
     @staticmethod
-    def orer(cond1, cond2, *conditions):
+    def orer(cond1, cond2, *conditions) -> 'Condition':
         return cond1.clone().or_(cond2, *conditions)
 
-    def __invert__(self):
+    def __invert__(self) -> 'Condition':
         self.output = [{"not": self.output}]
         return self
 
-    def not_(self):
+    def not_(self) -> 'Condition':
         return ~self
 
     def to_list(self) -> list:
         return self.output
 
     @staticmethod
-    def from_list(conditions):
+    def from_list(conditions) -> 'Condition':
         condition = Condition("", "", "")
         condition.output = conditions
         return condition
 
-    def clone(self, deep=False):
+    def clone(self, deep=False) -> 'Condition':
         condition = Condition("", "", "")
         if deep:
-            pass
+            condition.output = self._deep_clone(self.output)
         else:
             condition.output = [*self.output]
 
@@ -94,24 +97,15 @@ class Condition:
             elif "or" in cond:
                 item = {"or": cls._deep_clone(cond["or"])}
             elif "not" in cond:
-                item = {"or": cls._deep_clone(cond["not"])}
+                item = {"not": cls._deep_clone(cond["not"])}
             else:
                 item = {**cond}
 
             output.append(item)
         return output
 
-    def traverse(self, callback: callable, on_duplicate=False):
-        """
-        Traverse/visit every filter in the condition, either on the current condition, or on a deep copy.
-        The condition used will be returned, which is either this one, or a duplicate.
-        Note, a filter here is of the form { field: ..., operator: ..., value: ... }, ignoring "and", "not", and "or"
-        conditions
-        :param callback: A function that will be called and passed the current filter in the traversal
-        :param on_duplicate:
-        """
-        condition = self.clone(True) if on_duplicate else self
-        filters = [*condition.output]
+    def __iter__(self):
+        filters = self.output
 
         i = 0
         while i < len(filters):
@@ -123,10 +117,25 @@ class Condition:
             elif "not" in f:
                 filters.extend(f["not"])
             else:
-                callback(f)
+                yield f
 
             i += 1
         return filters
+
+    def traverse(self, callback: callable, on_duplicate=False) -> 'Condition':
+        """
+        Traverse/visit every filter in the condition, either on the current condition, or on a deep copy.
+        The condition used will be returned, which is either this one, or a duplicate.
+        Note, a filter here is of the form { field: ..., operator: ..., value: ... }, ignoring "and", "not", and "or"
+        conditions
+        :param callback: A function that will be called and passed the current filter in the traversal
+        :param on_duplicate:
+        """
+        condition = self.clone(True) if on_duplicate else self
+        for f in condition:
+            callback(f)
+
+        return condition
 
 
 class ValueLessCondition:
@@ -142,76 +151,85 @@ class Key:
     def __init__(self, field: str):
         self.field = field
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> Condition:
         return Condition(self.field, ">", other)
 
-    def gt(self, other):
+    def gt(self, other) -> Condition:
         return self > other
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> Condition:
         return Condition(self.field, "<", other)
 
-    def lt(self, other):
+    def lt(self, other) -> Condition:
         return self < other
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> Condition:
         return Condition(self.field, ">=", other)
 
-    def gte(self, other):
+    def gte(self, other) -> Condition:
         return self >= other
 
-    def __le__(self, other):
+    def __le__(self, other) -> Condition:
         return Condition(self.field, "<=", other)
 
-    def lte(self, other):
+    def lte(self, other) -> Condition:
         return self <= other
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> Condition:
         return Condition(self.field, "==", other)
 
-    def eq(self, other):
+    def eq(self, other) -> Condition:
         return self == other
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> Condition:
         return Condition(self.field, "!=", other)
 
-    def ne(self, other):
+    def ne(self, other) -> Condition:
         return self != other
 
-    def seq(self, other):
+    def seq(self, other) -> Condition:
         return Condition(self.field, "===", other)
 
-    def sne(self, other):
+    def sne(self, other) -> Condition:
         return Condition(self.field, "!==", other)
 
-    def in_(self, other):
+    def is_true(self) -> Condition:
+        return Condition(self.field, "===", True)
+
+    def is_false(self) -> Condition:
+        return Condition(self.field, "===", False)
+
+    def is_null(self) -> Condition:
+        return Condition(self.field, "===", None)
+
+    def in_(self, other) -> Condition:
         return Condition(self.field, "in", other)
 
-    def nin(self, other):
+    def nin(self, other) -> Condition:
         return Condition(self.field, "!in", other)
 
-    def contains(self, other):
+    def contains(self, other) -> Condition:
         return Condition(self.field, "contains", other)
 
-    def not_contains(self, other):
+    def not_contains(self, other) -> Condition:
         return Condition(self.field, "!contains", other)
 
-    def interval(self, *values):
+    def interval(self, *values) -> Condition:
         return Condition(self.field, "interval", values[0] if len(values) == 1 else values)
 
-    def not_interval(self, *values):
+    def not_interval(self, *values) -> Condition:
         return Condition(self.field, "!interval", values[0] if len(values) == 1 else values)
 
-    def startswith(self, other):
+    def startswith(self, other) -> Condition:
         return Condition(self.field, "startswith", other)
 
-    def endswith(self, other):
+    def endswith(self, other) -> Condition:
         return Condition(self.field, "endswith", other)
 
-    def present(self):
+    def present(self) -> Condition:
         return Condition(self.field, "present", None)
 
-    def not_present(self):
+    def not_present(self) -> Condition:
         return Condition(self.field, "!present", None)
 
     def operator(self, op: str) -> ValueLessCondition:
@@ -287,11 +305,11 @@ class Filter:
         overall = None
         for f in filters:
             if isinstance(f, list):
-                c = self._filter(item, f, oring, context)
+                c = self._filter(item, f, False, context)
             elif "or" in f:
                 c = self._filter(item, f["or"], True, context)
             elif "not" in f:
-                c = not self._filter(item, f["not"], oring, context)
+                c = not self._filter(item, f["not"], False, context)
             else:
                 query_result = self.queries[f["field"]].single(item, context)
                 if query_result is Query.MISSING and f["operator"] not in ("present", "!present"):
@@ -302,7 +320,7 @@ class Filter:
             if overall is None:
                 overall = c
 
-            if "or" in f or oring:
+            if oring:
                 overall = c or overall
 
                 if overall:  # shortcut or
@@ -338,7 +356,7 @@ class Filter:
             if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)})
         ]
 
-    def first(self, items: List[any], context: dict = None) -> any:
+    def first(self, items: List[any], context: dict = None) -> Union[any, None]:
         """
         Return the first item that matches the filters.
         Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
@@ -350,8 +368,10 @@ class Filter:
         for index, item in enumerate(items):
             if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)}):
                 return item
+        else:
+            return None
 
-    def last(self, items: List[any], context: dict = None) -> any:
+    def last(self, items: List[any], context: dict = None) -> Union[any, None]:
         """
         Return the last item that matches the filters.
         Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
