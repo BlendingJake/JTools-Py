@@ -340,6 +340,38 @@ class TestFilter(unittest.TestCase):
         cond.output[0]["or"][0][0]["value"] = "test"
         self.assertNotEqual(cond, cond2)
 
+    def test_filter_value_query_loc(self):
+        items = []
+        for i in small_data:
+            if i['latitude'] < i['longitude']:
+                items.append(i)
+
+        self.assertEqual(
+            items, Filter(Key("latitude") < Key("longitude")).many(small_data)
+        )
+
+    def test_filter_value_query_fruit(self):
+        items = []
+        for i in small_data:
+            if i['favoriteFruit']['strawberry'] * 5 >= i['favoriteFruit']['cherry'] / 2:
+                items.append(i)
+
+        self.assertEqual(
+            items,
+            Filter(Key('favoriteFruit.strawberry.$multiply(5)') >= Key('favoriteFruit.cherry.$divide(2)')).many(small_data)
+        )
+
+    def test_filter_value_query_advanced(self):
+        items = []
+        for i in small_data:
+            if len(i['friends']) == int(i['greeting'].split(' unread')[0].split('have ')[1]):
+                items.append(i)
+
+        self.assertEqual(
+            items,
+            Filter(Key('friends.$length') == Key('greeting.$split(" unread").0.$split("have ").1.$int')).many(small_data)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

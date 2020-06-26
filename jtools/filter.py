@@ -144,93 +144,102 @@ class ValueLessCondition:
         self.op = op
 
     def value(self, value: any) -> Condition:
-        return Condition(self.field, self.op, value)
+        if isinstance(value, Key):
+            return Condition(self.field, self.op, {"query": value.field})
+        else:
+            return Condition(self.field, self.op, value)
 
 
 class Key:
     def __init__(self, field: str):
         self.field = field
 
+    def _build(self, op, other) -> Condition:
+        if isinstance(other, Key):
+            return Condition(self.field, op, {"query": other.field})
+        else:
+            return Condition(self.field, op, other)
+
     def __gt__(self, other) -> Condition:
-        return Condition(self.field, ">", other)
+        return self._build(">", other)
 
     def gt(self, other) -> Condition:
         return self > other
 
     def __lt__(self, other) -> Condition:
-        return Condition(self.field, "<", other)
+        return self._build("<", other)
 
     def lt(self, other) -> Condition:
         return self < other
 
     def __ge__(self, other) -> Condition:
-        return Condition(self.field, ">=", other)
+        return self._build(">=", other)
 
     def gte(self, other) -> Condition:
         return self >= other
 
     def __le__(self, other) -> Condition:
-        return Condition(self.field, "<=", other)
+        return self._build("<=", other)
 
     def lte(self, other) -> Condition:
         return self <= other
 
     def __eq__(self, other) -> Condition:
-        return Condition(self.field, "==", other)
+        return self._build("==", other)
 
     def eq(self, other) -> Condition:
         return self == other
 
     def __ne__(self, other) -> Condition:
-        return Condition(self.field, "!=", other)
+        return self._build("!=", other)
 
     def ne(self, other) -> Condition:
         return self != other
 
     def seq(self, other) -> Condition:
-        return Condition(self.field, "===", other)
+        return self._build("===", other)
 
     def sne(self, other) -> Condition:
-        return Condition(self.field, "!==", other)
+        return self._build("!==", other)
 
     def is_true(self) -> Condition:
-        return Condition(self.field, "===", True)
+        return self._build("===", True)
 
     def is_false(self) -> Condition:
-        return Condition(self.field, "===", False)
+        return self._build("===", False)
 
     def is_null(self) -> Condition:
-        return Condition(self.field, "===", None)
+        return self._build("===", None)
 
     def in_(self, other) -> Condition:
-        return Condition(self.field, "in", other)
+        return self._build("in", other)
 
     def nin(self, other) -> Condition:
-        return Condition(self.field, "!in", other)
+        return self._build("!in", other)
 
     def contains(self, other) -> Condition:
-        return Condition(self.field, "contains", other)
+        return self._build("contains", other)
 
     def not_contains(self, other) -> Condition:
-        return Condition(self.field, "!contains", other)
+        return self._build("!contains", other)
 
     def interval(self, *values) -> Condition:
-        return Condition(self.field, "interval", values[0] if len(values) == 1 else values)
+        return self._build("interval", values[0] if len(values) == 1 else values)
 
     def not_interval(self, *values) -> Condition:
-        return Condition(self.field, "!interval", values[0] if len(values) == 1 else values)
+        return self._build("!interval", values[0] if len(values) == 1 else values)
 
     def startswith(self, other) -> Condition:
-        return Condition(self.field, "startswith", other)
+        return self._build("startswith", other)
 
     def endswith(self, other) -> Condition:
-        return Condition(self.field, "endswith", other)
+        return self._build("endswith", other)
 
     def present(self) -> Condition:
-        return Condition(self.field, "present", None)
+        return self._build("present", None)
 
     def not_present(self) -> Condition:
-        return Condition(self.field, "!present", None)
+        return self._build("!present", None)
 
     def operator(self, op: str) -> ValueLessCondition:
         return ValueLessCondition(self.field, op)
@@ -293,8 +302,13 @@ class Filter:
                 out.update(self._preprocess(f["or"], convert_ints))
             elif "not" in f:
                 out.update(self._preprocess(f["not"], convert_ints))
-            elif f["field"] not in out:
-                out[f["field"]] = Query(f["field"], fallback=Query.MISSING, convert_ints=convert_ints)
+            else:
+                if f["field"] not in out:
+                    out[f["field"]] = Query(f["field"], fallback=Query.MISSING, convert_ints=convert_ints)
+                if isinstance(f["value"], dict) and 'query' in f['value'] and f['value']['query'] not in out:
+                    out[f['value']['query']] = Query(
+                        f['value']['query'], fallback=Query.MISSING, convert_ints=convert_ints
+                    )
 
         return out
 
@@ -312,10 +326,15 @@ class Filter:
                 c = not self._filter(item, f["not"], False, context)
             else:
                 query_result = self.queries[f["field"]].single(item, context)
+                if isinstance(f['value'], dict) and 'query' in f['value']:
+                    value = self.queries[f['value']['query']].single(item, context)
+                else:
+                    value = f['value']
+
                 if query_result is Query.MISSING and f["operator"] not in ("present", "!present"):
                     c = self.missing_field_response
                 else:
-                    c = self._filters[f["operator"]](query_result, f["value"])
+                    c = self._filters[f["operator"]](query_result, value)
 
             if overall is None:
                 overall = c

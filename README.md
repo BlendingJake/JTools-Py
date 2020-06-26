@@ -467,6 +467,10 @@ Lists
 
     OR
 
+    {"field": <field>, "operator": <op>, "value": { "query": <JQL query>}},
+
+    OR
+
     {"or": <nested outer structure>},
     
     OR
@@ -538,6 +542,9 @@ Operators:
 >operators, the actual Python operators can be used, so `Key(<field>) <op> <value>`.
 >For example: `Key("meta.id").eq(12)` is the same as `Key("meta.id") == 12`,
 >which is the same as `{"field": "meta.id", "operator": "==", "value": 12}`.
+
+>To use a filter where the value is a query itself, use `Key(<field>` as the value.
+>For example: `Key("tags.tag1").gt(Key("tag.tag2"))`.
 
 >The table below describes all of the functions which map to the underlying conditions. 
 >Additionally, several other methods are provided to simplify certain aspects of 
