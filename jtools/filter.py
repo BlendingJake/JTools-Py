@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Callable
 from .query import Query
 import logging
 from os import environ
@@ -246,7 +246,7 @@ class Key:
 
 
 class Filter:
-    _filters = {
+    FILTERS = {
         ">": lambda field, value: field > value,
         "<": lambda field, value: field < value,
         ">=": lambda field, value: field >= value,
@@ -334,7 +334,7 @@ class Filter:
                 if query_result is Query.MISSING and f["operator"] not in ("present", "!present"):
                     c = self.missing_field_response
                 else:
-                    c = self._filters[f["operator"]](query_result, value)
+                    c = self.FILTERS[f["operator"]](query_result, value)
 
             if overall is None:
                 overall = c
@@ -400,6 +400,23 @@ class Filter:
         :return: The last item that matched the filters
         """
         return self.first(items[::-1], context=context)
+
+    @classmethod
+    def register_filter(cls, op, func: Callable[[any, any], bool]) -> bool:
+        """
+        Register a new filter.
+        :param op: The operator identifying this filter.
+        :param func: The function to determine whether the filter has been met or not.
+            Will be passed two values: (field_value, filter_value) and must return
+            a boolean indicating whether the filter was met or not.
+        :return: Whether the filter could be registered or not
+        """
+        if op not in cls.FILTERS:
+            cls.FILTERS[op] = func
+            return True
+        else:
+            logger.warning(f"{op} is already registered as a filter")
+            return False
 
 
 if __name__ == "__main__":

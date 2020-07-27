@@ -138,9 +138,18 @@ class TestGetter(unittest.TestCase):
 
     def test_math_args(self):
         data = EZDict({"a": 4, "b": -4, "c": 2.5, "d": [3, 4], "e": 0, "pi": 3.1415926})
-        self.assertEqual(data.a / (data.b + data.c) - data.pi, Query("$inject(@a / (@b + @c) - @pi)").single(data))
-        self.assertEqual(data.a + data.b * data.c ** data.e, Query("$inject(@a + @b * @c ** @e)").single(data))
-        self.assertEqual((data.a + data.b) * data.c ** data.e, Query("$inject((@a + @b) * @c ** @e)").single(data))
+        self.assertEqual(
+            data.a / (data.b + data.c) - data.pi,
+            Query("$inject(@a / (@b + @c) - @pi)").single(data)
+        )
+        self.assertEqual(
+            data.a + data.b * data.c ** data.e,
+            Query("$inject(@a + @b * @c ** @e)").single(data)
+        )
+        self.assertEqual(
+            (data.a + data.b) * data.c ** data.e,
+            Query("$inject((@a + @b) * @c ** @e)").single(data)
+        )
 
     # GENERAL
     def test_special_length_string(self):
