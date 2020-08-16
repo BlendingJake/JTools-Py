@@ -1,9 +1,10 @@
 import sys
 import json
+from exectiming.exectiming import Timer
+from pathlib import Path
 
-sys.path.append("../")
-
-from jtools import Filter, Key
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import jtools
 
 with open("./data/10000.json", "r") as file:
     large_data = json.loads(file.read())
@@ -12,11 +13,15 @@ with open("./data/20.json", "r") as file:
     small_data = json.loads(file.read())
 
 if __name__ == "__main__":
-    test = [{"value": i} for i in range(10)]
-    print(test)
+    t = Timer(split=True, start=True, label=f'Query: {jtools.__version__}')
+    data = {'data': {'meta': {'timestamp': 12}}}
+    reps = 1000
+    ipr = 10
 
-    print(Filter(Key("value") < 5).many(test))
-    print(Filter(~Key("value").lt(5)).many(test))
+    for i in range(reps):
+        for j in range(ipr):
+            d = jtools.Query('data.meta.timestamp').single(data)
+        t.log(iterations_per_run=ipr)
 
-    print(Filter(Key("value").lt(3) | Key("value").gt(7)).many(test))
-    print(Filter(~(Key("value").lt(3) | Key("value").gt(7))).many(test))
+    print(d)
+    t.statistics()

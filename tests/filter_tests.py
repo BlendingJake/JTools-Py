@@ -3,9 +3,9 @@ import sys
 import json
 from pathlib import Path
 
-sys.path.append("../")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jtools import Filter, Key, Condition
+from jtools import Filter, Key, Condition, __version__
 
 folder = Path(__file__).parent
 with open(folder / "data/10000.json", "r") as file:
@@ -194,6 +194,30 @@ class TestFilter(unittest.TestCase):
         self.assertFalse(Filter(Key("value").nin("5, 6, 7")).single(data))
         self.assertTrue(Filter(Key("value").nin("6, 7")).single(data))
 
+    def test_contains_all(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertTrue(Filter(Key('a').contains_all([1, None])).single(item))
+        self.assertTrue(Filter(Key('a').contains_all([])).single(item))
+
+        self.assertFalse(Filter(Key('a').contains_all([1, 3.45, False])).single(item))
+        self.assertFalse(Filter(Key('a').contains_all(['missing'])).single(item))
+
+    def test_not_contains_all(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertFalse(
+            Filter([{'field': 'a', 'operator': '!containsAll', 'value': [1, True]}]).single(item)
+        )
+        self.assertTrue(
+            Filter([{'field': 'a', 'operator': '!containsAll', 'value': [1, True, 'bill']}]).single(item)
+        )
+        self.assertFalse(
+            Filter([{'field': 'a', 'operator': '!containsAll', 'value': []}]).single(item)
+        )
+
     def test_starts_and_endswith(self):
         self.assertTrue(
             Filter([{"field": "name", "operator": "endswith", "value": "Weiss"}]).single(small_data[2])
@@ -374,4 +398,5 @@ class TestFilter(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    print(__version__)
     unittest.main()

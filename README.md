@@ -41,10 +41,15 @@ declaration files.
      * Support for keyword arguments:`$index("value", fallback=12)`
      * Whitespace is allowed in a lot more places in a query now, which is very helpful in a language
      like Python which has multi-line strings.
+   * Performance increase for cases were a `Query` field doesn't have any specials. A faster parsing
+   method can be used for about a 40x performance increase in creating the `Query` object. Note, this
+   just speeds up `Query` creation and not the speed of `.single()`, `.many()`, etc.
    * Added functionality so that `Filter` values can be queries.
      * Using JSON: `{ field: <field>, operator: <op>, value: { query: <value query> } }`
      * Using `Key`: `Key(<field>).<op>(Key(<value_query>))`
      * For example: `Key("tag.tag1").gt(Key("tag.tag2"))`
+   * Two new filters: `containsAll` and `!containsAll` that all membership checking for multiple
+   items at once.
    * Many new specials
      * `$key_of_min_value` - Gets the key of the min value in an dict/map/object
      * `$key_of_max_value` - Gets the key of the max value in an dict/map/object
@@ -538,6 +543,8 @@ Operators:
  * `!in`
  * `contains`: `<value> in <field>`
  * `!contains`
+ * `containsAll`: `x in <field> for x in <value>`
+ * `!containsAll`: `exists x in <value> such that x not in <field>`
  * `interval`: `<field> in interval [value[0], value[1]]` (closed/inclusive interval)
  * `!interval`: `<field> not in interval [value[0], value[1]]` 
  * `startswith`
@@ -582,6 +589,8 @@ Operators:
 | `!in` | `nin` | N/A | 
 | `contains` | `contains` | N/A | 
 | `!contains` | `not_contains` | N/A | 
+| `containsAll` | `contains_all` | N/A | 
+| `!containsAll` | `not_contains_all` | N/A | 
 | `interval` | `interval` | N/A |
 | `!interval` | `not_interval` | N/A |
 | `startswith` | `startswith` | N/A | 

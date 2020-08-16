@@ -331,8 +331,12 @@ class Query:
                 try:
                     if f == "":
                         p = JQLQuery()
+                    elif '$' not in f:
+                        # if there are no specials, then manually parse
+                        p = self._manually_parse(f)
                     else:
                         p = JQLQueryBuilder(f, convert_ints=self.convert_ints).get_built_query()
+
                     self.parts.append(p)
                 except JQLParseError as e:
                     logger.error(e)
@@ -342,6 +346,23 @@ class Query:
 
     def __repr__(self):
         return f"Query: {self.parts}"
+
+    def _manually_parse(self, query_string: str) -> JQLQuery:
+        query = JQLQuery()
+        for part in query_string.split('.'):
+            field = JQLField()
+            field.set_field(part)
+
+            if self.convert_ints:
+                try:
+                    f = int(part)
+                    field.set_field(f)
+                except (ValueError, TypeError):
+                    pass
+
+            query.add(field)
+
+        return query
 
     def _query(self, value, query: JQLQuery, context: dict):
         original = value

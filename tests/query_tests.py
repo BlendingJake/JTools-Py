@@ -3,14 +3,14 @@ import sys
 import json
 import datetime
 from io import StringIO
-from pathlib import Path
 from ezdict import EZDict
 from random import randint
 from contextlib import redirect_stdout
+from pathlib import Path
 
-sys.path.append("../")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jtools import Query, SpecialNotFoundError
+from jtools import Query, SpecialNotFoundError, __version__
 
 folder = Path(__file__).parent
 with open(folder / "data/10000.json", "r") as file:
@@ -708,4 +708,5 @@ class TestGetter(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    print(__version__)
     unittest.main()
