@@ -194,28 +194,44 @@ class TestFilter(unittest.TestCase):
         self.assertFalse(Filter(Key("value").nin("5, 6, 7")).single(data))
         self.assertTrue(Filter(Key("value").nin("6, 7")).single(data))
 
-    def test_contains_all(self):
+    def test_subset(self):
         item = {
             'a': [1, 'test', True, None, 3.45]
         }
-        self.assertTrue(Filter(Key('a').contains_all([1, None])).single(item))
-        self.assertTrue(Filter(Key('a').contains_all([])).single(item))
+        self.assertTrue(Filter(Key('a').subset({1, True, None, 3.45, 'test', 'missing'})).single(item))
+        self.assertTrue(Filter(Key('a').subset({1, True, None, 3.45, 'test'})).single(item))
+        self.assertFalse(Filter(Key('a').subset({1, True, None, 3.45})).single(item))
 
-        self.assertFalse(Filter(Key('a').contains_all([1, 3.45, False])).single(item))
-        self.assertFalse(Filter(Key('a').contains_all(['missing'])).single(item))
+    def test_not_subset(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertTrue(Filter(Key('a').not_subset({1, True, None, 3.45})).single(item))
+        self.assertTrue(Filter(Key('a').not_subset([])).single(item))
+        self.assertFalse(Filter(Key('a').not_subset({1, True, None, 3.45, 'test', 'missing'})).single(item))
 
-    def test_not_contains_all(self):
+    def test_superset(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertTrue(Filter(Key('a').superset([1, None])).single(item))
+        self.assertTrue(Filter(Key('a').superset([])).single(item))
+
+        self.assertFalse(Filter(Key('a').superset([1, 3.45, False])).single(item))
+        self.assertFalse(Filter(Key('a').superset(['missing'])).single(item))
+
+    def test_not_superset(self):
         item = {
             'a': [1, 'test', True, None, 3.45]
         }
         self.assertFalse(
-            Filter([{'field': 'a', 'operator': '!containsAll', 'value': [1, True]}]).single(item)
+            Filter([{'field': 'a', 'operator': '!superset', 'value': [1, True]}]).single(item)
         )
         self.assertTrue(
-            Filter([{'field': 'a', 'operator': '!containsAll', 'value': [1, True, 'bill']}]).single(item)
+            Filter(Key('a').not_superset([1, True, 'bill'])).single(item)
         )
         self.assertFalse(
-            Filter([{'field': 'a', 'operator': '!containsAll', 'value': []}]).single(item)
+            Filter([{'field': 'a', 'operator': '!superset', 'value': []}]).single(item)
         )
 
     def test_starts_and_endswith(self):
@@ -395,6 +411,20 @@ class TestFilter(unittest.TestCase):
             items,
             Filter(Key('friends.$length') == Key('greeting.$split(" unread").0.$split("have ").1.$int')).many(small_data)
         )
+
+        self.assertEqual(
+            items,
+            Filter(
+                Key('friends.$length').operator('==').value(
+                    Key('greeting.$split(" unread").0.$split("have ").1.$int')
+                )).many(small_data)
+        )
+
+    def test_register_filter(self):
+        self.assertTrue(Filter.register_filter('isMultiple', lambda field, value: field % value == 0))
+        self.assertTrue(Filter(Key('').operator('isMultiple').value(3)).single(27))
+        self.assertFalse(Filter(Key('').operator('isMultiple').value(3)).single(28))
+        self.assertFalse(Filter.register_filter('isMultiple', lambda field, value: False))
 
 
 if __name__ == "__main__":

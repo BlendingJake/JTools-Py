@@ -706,6 +706,13 @@ class TestGetter(unittest.TestCase):
         result = Query("$length(4*5").single({})
         self.assertIsNone(result)
 
+    def test_field_after_special(self):
+        data = {'a': {'b': 35}}
+        self.assertEqual(
+            data['a']['b'],
+            Query('a.$values.0').single(data)
+        )
+
 
 if __name__ == "__main__":
     print(__version__)

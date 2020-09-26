@@ -41,7 +41,7 @@ class Formatter:
             mq = JQLMultiQueryBuilder(self.spec, convert_ints).get_built_query()
             self.multi_query = mq
         except JQLParseError:
-            pass
+            self.multi_query = None
 
     def _format(self, mq: JQLMultiQuery, item, context: dict) -> str:
         if mq is None:

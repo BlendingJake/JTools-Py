@@ -48,8 +48,9 @@ declaration files.
      * Using JSON: `{ field: <field>, operator: <op>, value: { query: <value query> } }`
      * Using `Key`: `Key(<field>).<op>(Key(<value_query>))`
      * For example: `Key("tag.tag1").gt(Key("tag.tag2"))`
-   * Two new filters: `containsAll` and `!containsAll` that all membership checking for multiple
-   items at once.
+   * Four new filters: `subset`, `!subset`, `superset`, `!superset`. These should be read 
+   `field value <op> filter value`, so `subset` means all of the values returned from the field query
+   are in the filter value, which allows better filtering when both the field query and value are iterable.
    * Many new specials
      * `$key_of_min_value` - Gets the key of the min value in an dict/map/object
      * `$key_of_max_value` - Gets the key of the max value in an dict/map/object
@@ -543,8 +544,10 @@ Operators:
  * `!in`
  * `contains`: `<value> in <field>`
  * `!contains`
- * `containsAll`: `x in <field> for x in <value>`
- * `!containsAll`: `exists x in <value> such that x not in <field>`
+ * `subset`: `x in <value> for x in <field>`
+ * `!subset`: `exists x in <field> such that x not in <value>`
+ * `superset`: `x in <field> for x in <value>`
+ * `!superser`: `exists x in <value> such that x not in <field>`
  * `interval`: `<field> in interval [value[0], value[1]]` (closed/inclusive interval)
  * `!interval`: `<field> not in interval [value[0], value[1]]` 
  * `startswith`
@@ -589,8 +592,10 @@ Operators:
 | `!in` | `nin` | N/A | 
 | `contains` | `contains` | N/A | 
 | `!contains` | `not_contains` | N/A | 
-| `containsAll` | `contains_all` | N/A | 
-| `!containsAll` | `not_contains_all` | N/A | 
+| `subset` | `subset` | N/A | 
+| `!subset` | `not_subset` | N/A | 
+| `superset` | `superset` | N/A | 
+| `!superset` | `not_superset` | N/A | 
 | `interval` | `interval` | N/A |
 | `!interval` | `not_interval` | N/A |
 | `startswith` | `startswith` | N/A | 

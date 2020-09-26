@@ -223,11 +223,17 @@ class Key:
     def not_contains(self, other) -> Condition:
         return self._build("!contains", other)
 
-    def contains_all(self, other) -> Condition:
-        return self._build('containsAll', other)
+    def subset(self, other) -> Condition:
+        return self._build('subset', other)
 
-    def not_contains_all(self, other) -> Condition:
-        return self._build('!containsAll', other)
+    def not_subset(self, other) -> Condition:
+        return self._build('!subset', other)
+
+    def superset(self, other) -> Condition:
+        return self._build('superset', other)
+
+    def not_superset(self, other) -> Condition:
+        return self._build('!superset', other)
 
     def interval(self, *values) -> Condition:
         return self._build("interval", values[0] if len(values) == 1 else values)
@@ -267,8 +273,11 @@ class Filter:
 
         "contains": lambda field, value: value in field,
         "!contains": lambda field, value: value not in field,
-        "containsAll": lambda field, value: all(x in field for x in value),
-        "!containsAll": lambda field, value: any(x not in field for x in value),
+
+        "subset": lambda field, value: all(x in value for x in field),
+        "!subset": lambda field, value: any(x not in value for x in field),
+        "superset": lambda field, value: all(x in field for x in value),
+        "!superset": lambda field, value: any(x not in field for x in value),
 
         "interval": lambda field, value: value[0] <= field <= value[1],
         "!interval": lambda field, value: field < value[0] or value[1] < field,
