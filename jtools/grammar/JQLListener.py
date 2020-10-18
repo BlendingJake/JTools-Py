@@ -89,12 +89,102 @@ class JQLListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by JQLParser#keyword_argument.
+    def enterKeyword_argument(self, ctx:JQLParser.Keyword_argumentContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#keyword_argument.
+    def exitKeyword_argument(self, ctx:JQLParser.Keyword_argumentContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#argument.
+    def enterArgument(self, ctx:JQLParser.ArgumentContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#argument.
+    def exitArgument(self, ctx:JQLParser.ArgumentContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#arith_expr.
+    def enterArith_expr(self, ctx:JQLParser.Arith_exprContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#arith_expr.
+    def exitArith_expr(self, ctx:JQLParser.Arith_exprContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#arith_operator.
+    def enterArith_operator(self, ctx:JQLParser.Arith_operatorContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#arith_operator.
+    def exitArith_operator(self, ctx:JQLParser.Arith_operatorContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#factor_expr.
+    def enterFactor_expr(self, ctx:JQLParser.Factor_exprContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#factor_expr.
+    def exitFactor_expr(self, ctx:JQLParser.Factor_exprContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#factor_operator.
+    def enterFactor_operator(self, ctx:JQLParser.Factor_operatorContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#factor_operator.
+    def exitFactor_operator(self, ctx:JQLParser.Factor_operatorContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#power_expr.
+    def enterPower_expr(self, ctx:JQLParser.Power_exprContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#power_expr.
+    def exitPower_expr(self, ctx:JQLParser.Power_exprContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#power_operator.
+    def enterPower_operator(self, ctx:JQLParser.Power_operatorContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#power_operator.
+    def exitPower_operator(self, ctx:JQLParser.Power_operatorContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#math_value.
+    def enterMath_value(self, ctx:JQLParser.Math_valueContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#math_value.
+    def exitMath_value(self, ctx:JQLParser.Math_valueContext):
+        pass
+
+
     # Enter a parse tree produced by JQLParser#value.
     def enterValue(self, ctx:JQLParser.ValueContext):
         pass
 
     # Exit a parse tree produced by JQLParser#value.
     def exitValue(self, ctx:JQLParser.ValueContext):
+        pass
+
+
+    # Enter a parse tree produced by JQLParser#primitive_value.
+    def enterPrimitive_value(self, ctx:JQLParser.Primitive_valueContext):
+        pass
+
+    # Exit a parse tree produced by JQLParser#primitive_value.
+    def exitPrimitive_value(self, ctx:JQLParser.Primitive_valueContext):
         pass
 
 

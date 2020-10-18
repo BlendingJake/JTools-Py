@@ -3,9 +3,9 @@ import sys
 import json
 from pathlib import Path
 
-sys.path.append("../")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jtools import Filter, Key, Condition
+from jtools import Filter, Key, Condition, __version__
 
 folder = Path(__file__).parent
 with open(folder / "data/10000.json", "r") as file:
@@ -75,6 +75,7 @@ class TestFilter(unittest.TestCase):
             ]},
             [{"field": "company", "operator": "==", "value": "XYLAR"}]
         ]).many(small_data)
+
         self.assertEqual(1, len(items))
         self.assertEqual(len(items), len(items2))
         self.assertEqual("5e2797c05aa0585816ce8b8c", items[0]["_id"])
@@ -193,6 +194,46 @@ class TestFilter(unittest.TestCase):
         self.assertFalse(Filter(Key("value").nin("5, 6, 7")).single(data))
         self.assertTrue(Filter(Key("value").nin("6, 7")).single(data))
 
+    def test_subset(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertTrue(Filter(Key('a').subset({1, True, None, 3.45, 'test', 'missing'})).single(item))
+        self.assertTrue(Filter(Key('a').subset({1, True, None, 3.45, 'test'})).single(item))
+        self.assertFalse(Filter(Key('a').subset({1, True, None, 3.45})).single(item))
+
+    def test_not_subset(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertTrue(Filter(Key('a').not_subset({1, True, None, 3.45})).single(item))
+        self.assertTrue(Filter(Key('a').not_subset([])).single(item))
+        self.assertFalse(Filter(Key('a').not_subset({1, True, None, 3.45, 'test', 'missing'})).single(item))
+
+    def test_superset(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertTrue(Filter(Key('a').superset([1, None])).single(item))
+        self.assertTrue(Filter(Key('a').superset([])).single(item))
+
+        self.assertFalse(Filter(Key('a').superset([1, 3.45, False])).single(item))
+        self.assertFalse(Filter(Key('a').superset(['missing'])).single(item))
+
+    def test_not_superset(self):
+        item = {
+            'a': [1, 'test', True, None, 3.45]
+        }
+        self.assertFalse(
+            Filter([{'field': 'a', 'operator': '!superset', 'value': [1, True]}]).single(item)
+        )
+        self.assertTrue(
+            Filter(Key('a').not_superset([1, True, 'bill'])).single(item)
+        )
+        self.assertFalse(
+            Filter([{'field': 'a', 'operator': '!superset', 'value': []}]).single(item)
+        )
+
     def test_starts_and_endswith(self):
         self.assertTrue(
             Filter([{"field": "name", "operator": "endswith", "value": "Weiss"}]).single(small_data[2])
@@ -241,6 +282,14 @@ class TestFilter(unittest.TestCase):
             Filter(Key("INDEX").interval(1, 5)).many(small_data)
         )
 
+    def test_filter_by_index_with_context(self):
+        self.assertEqual(
+            [small_data[3]],
+            Filter(
+                Key("INDEX").eq(3) & Key("age.$arith('//', @a)").eq(small_data[3]["age"] // 2)
+            ).many(small_data, {"a": 2})
+        )
+
     def test_filter_traversal(self):
         filters = [
             {"field": "blah", "operator": "===", "value": "blah"},
@@ -256,8 +305,128 @@ class TestFilter(unittest.TestCase):
             {"not": [{"or": filters[3:]}]}
         ])
 
+        for index, filter_ in enumerate(filters):
+            self.assertEqual(filter_, filters[index])
+
         condition.traverse(lambda f: self.assertEqual(filters.pop(0), f))
+
+    def test_filter_shortcutting(self):
+        self.assertFalse(
+            Filter(Key("not").present() & Key("not.available").eq(4)).single(small_data[0])
+        )
+        self.assertTrue(
+            Filter(Key("gender").eq("male") | Key("not.available").eq(4)).single(small_data[0])
+        )
+
+    def test_filter_fallback(self):
+        self.assertTrue(
+            Filter(Key("not.available.$fallback(1)").eq(1)).single(small_data[0])
+        )
+
+    def test_first(self):
+        first_female = None
+        for item in small_data:
+            if item["gender"] == "female":
+                first_female = item
+                break
+
+        self.assertEqual(first_female, Filter(Key("gender") == "female").first(small_data))
+        self.assertIsNone(Filter(Key("gender") == "not_found").first(small_data))
+
+    def test_last(self):
+        last_female = None
+        for item in reversed(small_data):
+            if item["gender"] == "female":
+                last_female = item
+                break
+
+        self.assertEqual(last_female, Filter(Key("gender") == "female").last(small_data))
+
+    def test_large_filter(self):
+        cond = Condition.orer(
+            Condition.ander(Key("age") == 34, Key("name") == "Chang Pollard", Key("isActive").is_true()),
+            Condition.ander(Key("isActive").is_false(), Key("email").startswith("woodard")),
+            Condition.ander(Key("friends.$length") == 7, Key("friends.0.name") == "Katrina Crane"),
+            Condition.ander(Key("name") == "Castro Wood", Key("age") == -10)
+        )
+
+        self.assertEqual(
+            [small_data[i] for i in [1, 3, 8]],
+            Filter(cond).many(small_data)
+        )
+
+    def test_is_null(self):
+        items = [
+            {"a": None},
+            {"a": False},
+            {"a": None},
+            {"a": 4}
+        ]
+
+        self.assertEqual(
+            [items[0], items[2]],
+            Filter(Key("a").is_null()).many(items)
+        )
+
+    def test_deep_clone(self):
+        cond = Condition.orer(
+            Condition.ander(Key("age") == 34, Key("name") == "Chang Pollard", Key("isActive").is_true()),
+            Condition.ander(Key("isActive").is_false(), Key("email").startswith("woodard")),
+            Condition.ander(Key("friends.$length") == 7, Key("friends.0.name") == "Katrina Crane"),
+            ~Condition.ander(Key("name") == "Castro Wood", Key("age") == -10)
+        )
+        cond2 = cond.clone(True)
+        self.assertEqual(cond, cond2)
+        cond.output[0]["or"][0][0]["value"] = "test"
+        self.assertNotEqual(cond, cond2)
+
+    def test_filter_value_query_loc(self):
+        items = []
+        for i in small_data:
+            if i['latitude'] < i['longitude']:
+                items.append(i)
+
+        self.assertEqual(
+            items, Filter(Key("latitude") < Key("longitude")).many(small_data)
+        )
+
+    def test_filter_value_query_fruit(self):
+        items = []
+        for i in small_data:
+            if i['favoriteFruit']['strawberry'] * 5 >= i['favoriteFruit']['cherry'] / 2:
+                items.append(i)
+
+        self.assertEqual(
+            items,
+            Filter(Key('favoriteFruit.strawberry.$multiply(5)') >= Key('favoriteFruit.cherry.$divide(2)')).many(small_data)
+        )
+
+    def test_filter_value_query_advanced(self):
+        items = []
+        for i in small_data:
+            if len(i['friends']) == int(i['greeting'].split(' unread')[0].split('have ')[1]):
+                items.append(i)
+
+        self.assertEqual(
+            items,
+            Filter(Key('friends.$length') == Key('greeting.$split(" unread").0.$split("have ").1.$int')).many(small_data)
+        )
+
+        self.assertEqual(
+            items,
+            Filter(
+                Key('friends.$length').operator('==').value(
+                    Key('greeting.$split(" unread").0.$split("have ").1.$int')
+                )).many(small_data)
+        )
+
+    def test_register_filter(self):
+        self.assertTrue(Filter.register_filter('isMultiple', lambda field, value: field % value == 0))
+        self.assertTrue(Filter(Key('').operator('isMultiple').value(3)).single(27))
+        self.assertFalse(Filter(Key('').operator('isMultiple').value(3)).single(28))
+        self.assertFalse(Filter.register_filter('isMultiple', lambda field, value: False))
 
 
 if __name__ == "__main__":
+    print(__version__)
     unittest.main()

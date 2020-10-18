@@ -24,8 +24,6 @@ class Formatter:
     }
     Formatter("Name: @name and DOB: @DOB").single(data)  # 'Name: John Smith and DOB: 11/25/198'
     """
-    MISSING = object()
-
     def __init__(self, spec: str, fallback: str = "<missing>", convert_ints: bool = True):
         """
         Create a new Formatter for a spec string which can contain multiple JQL queries, prefixed with '@',
@@ -43,7 +41,7 @@ class Formatter:
             mq = JQLMultiQueryBuilder(self.spec, convert_ints).get_built_query()
             self.multi_query = mq
         except JQLParseError:
-            pass
+            self.multi_query = None
 
     def _format(self, mq: JQLMultiQuery, item, context: dict) -> str:
         if mq is None:
@@ -52,11 +50,11 @@ class Formatter:
             output = []
             for part in mq.queries:
                 if isinstance(part, JQLQuery):
-                    v = Query(part, convert_ints=self.convert_ints, fallback=self.MISSING).single(item, context)
+                    v = Query(part, convert_ints=self.convert_ints, fallback=Query.MISSING).single(item, context)
                 else:
                     v = part.text.replace("@@", "@")
 
-                if v is self.MISSING:
+                if v is Query.MISSING:
                     output.append(self.fallback)
                 else:
                     output.append(v)

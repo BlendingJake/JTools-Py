@@ -11,6 +11,9 @@ __all__ = [
     'JQLQuery',
     'JQLMultiQuery',
     'JQLRawInput',
+    'JQLArgument',
+    'JQLKeywordArgument',
+    'JQLExpression',
 
     'JQLQueryBuilder',
     'JQLMultiQueryBuilder',

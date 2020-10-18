@@ -2,9 +2,9 @@ grammar JQL;
 
 jql_multi_query: (AT query | raw_text)* ;
 
-jql_query: query? EOF ;
+jql_query: WS* query? WS* EOF ;
 
-query: query_part (DOT query_part)* ;
+query: query_part (WS* DOT query_part)* ;
 
 raw_text: (WS+ | (AT AT) | ~AT)+;
 
@@ -22,8 +22,27 @@ special
 special_name: name ;
 
 arguments
-    : LPAREN SPACE* value (SPACE* COMMA SPACE* value)* SPACE* RPAREN
-    | LPAREN SPACE* RPAREN
+    : LPAREN WS* argument (WS* COMMA WS* argument)* (WS* COMMA WS* keyword_argument)* WS* RPAREN
+    | LPAREN WS* keyword_argument (WS* COMMA WS* keyword_argument)* RPAREN
+    | LPAREN WS* RPAREN
+    ;
+
+keyword_argument: name WS* '=' WS* (arith_expr | value);
+argument: arith_expr | value;
+
+arith_expr: factor_expr (WS* arith_operator WS* factor_expr)*;
+arith_operator: '+' | '-';
+
+factor_expr: power_expr ( WS* factor_operator WS* power_expr)*;
+factor_operator: '/' | '//' | '*' | '%';
+
+power_expr: math_value ( WS* power_operator WS* math_value)*;
+power_operator: '**';
+
+math_value
+    : AT query
+    | number
+    | LPAREN WS* arith_expr WS* RPAREN
     ;
 
 value
@@ -31,27 +50,32 @@ value
     | list_value
     | set_value
     | object_value
-    | number
+    | arith_expr
+    | primitive_value
+    ;
+
+primitive_value
+    : number
     | STRING
     | PRIMITIVE
     ;
 
 list_value
-    : LBRACKET SPACE* value (SPACE* COMMA SPACE* value)* SPACE* RBRACKET
-    | LBRACKET SPACE*RBRACKET
+    : LBRACKET WS* value (WS* COMMA WS* value)* WS* RBRACKET
+    | LBRACKET WS* RBRACKET
     ;
 
 set_value
-    : LBRACE SPACE* value (SPACE* COMMA SPACE* value)* SPACE* RBRACE
-    | LBRACE SPACE* RBRACE
+    : LBRACE WS* value (WS* COMMA WS* value)* WS* RBRACE
+    | LBRACE WS* RBRACE
     ;
 
 object_value
-    : LBRACE SPACE* pair (SPACE* COMMA SPACE* pair)* SPACE* RBRACE
-    | LBRACE SPACE* SEMI SPACE* RBRACE
+    : LBRACE WS* pair (WS* COMMA  WS* pair)* WS* RBRACE
+    | LBRACE WS* SEMI WS* RBRACE
     ;
 
-pair: key SPACE* SEMI SPACE* value ;
+pair: key WS* SEMI WS* value ;
 
 key: '@' query | STRING | number | PRIMITIVE ;
 
@@ -82,6 +106,5 @@ STRING
     : '"' ('\\"' | ~'"')* '"'
     | '\'' ('\\\'' | ~'\'')* '\''
     ;
-SPACE: [ ];
-WS: SPACE | [\n\t\r\f];
+WS: [ \n\t\r\f];
 LAST: ~[\n];

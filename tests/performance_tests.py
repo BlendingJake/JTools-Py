@@ -7,7 +7,7 @@ from exectiming.exectiming import StaticTimer, Timer
 folder = Path(__file__).resolve().parent
 sys.path.append(str(folder.parent))
 
-from jtools import Filter, Key, Query, Formatter
+from jtools import Filter, Key, Query, Formatter, __version__
 
 with open(folder / "data/10000.json", "r") as file:
     large_data = json.loads(file.read())
@@ -76,6 +76,7 @@ class PerformanceTesting(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    print(__version__)
     timer = Timer()
 
     # timer.time_it(Filter(Key("age") > 40).many, lambda: large_data[:randint(0, len(large_data))],

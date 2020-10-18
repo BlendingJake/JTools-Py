@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Callable
 from .query import Query
 import logging
 from os import environ
@@ -20,11 +20,14 @@ class Condition:
     def __repr__(self):
         return str(self.output)
 
-    def __and__(self, other):
+    def __eq__(self, other):
+        return isinstance(other, Condition) and other.output == self.output
+
+    def __and__(self, other) -> 'Condition':
         self.output.extend(other.output)
         return self
 
-    def and_(self, *args):
+    def and_(self, *args) -> 'Condition':
         val = self
         for a in args:
             val = val & a
@@ -32,10 +35,10 @@ class Condition:
         return val
 
     @staticmethod
-    def ander(cond1, cond2, *conditions):
+    def ander(cond1, cond2, *conditions) -> 'Condition':
         return cond1.clone().and_(cond2, *conditions)
 
-    def __or__(self, other):
+    def __or__(self, other) -> 'Condition':
         t = []
         for l in (self, other):
             if len(l.output) == 1:
@@ -49,7 +52,7 @@ class Condition:
         self.output = [{"or": t}]
         return self
 
-    def or_(self, *args):
+    def or_(self, *args) -> 'Condition':
         val = self
         for a in args:
             val = val | a
@@ -57,29 +60,29 @@ class Condition:
         return val
 
     @staticmethod
-    def orer(cond1, cond2, *conditions):
+    def orer(cond1, cond2, *conditions) -> 'Condition':
         return cond1.clone().or_(cond2, *conditions)
 
-    def __invert__(self):
+    def __invert__(self) -> 'Condition':
         self.output = [{"not": self.output}]
         return self
 
-    def not_(self):
+    def not_(self) -> 'Condition':
         return ~self
 
     def to_list(self) -> list:
         return self.output
 
     @staticmethod
-    def from_list(conditions):
+    def from_list(conditions) -> 'Condition':
         condition = Condition("", "", "")
         condition.output = conditions
         return condition
 
-    def clone(self, deep=False):
+    def clone(self, deep=False) -> 'Condition':
         condition = Condition("", "", "")
         if deep:
-            pass
+            condition.output = self._deep_clone(self.output)
         else:
             condition.output = [*self.output]
 
@@ -94,24 +97,15 @@ class Condition:
             elif "or" in cond:
                 item = {"or": cls._deep_clone(cond["or"])}
             elif "not" in cond:
-                item = {"or": cls._deep_clone(cond["not"])}
+                item = {"not": cls._deep_clone(cond["not"])}
             else:
                 item = {**cond}
 
             output.append(item)
         return output
 
-    def traverse(self, callback: callable, on_duplicate=False):
-        """
-        Traverse/visit every filter in the condition, either on the current condition, or on a deep copy.
-        The condition used will be returned, which is either this one, or a duplicate.
-        Note, a filter here is of the form { field: ..., operator: ..., value: ... }, ignoring "and", "not", and "or"
-        conditions
-        :param callback: A function that will be called and passed the current filter in the traversal
-        :param on_duplicate:
-        """
-        condition = self.clone(True) if on_duplicate else self
-        filters = [*condition.output]
+    def __iter__(self):
+        filters = self.output
 
         i = 0
         while i < len(filters):
@@ -123,10 +117,25 @@ class Condition:
             elif "not" in f:
                 filters.extend(f["not"])
             else:
-                callback(f)
+                yield f
 
             i += 1
         return filters
+
+    def traverse(self, callback: callable, on_duplicate=False) -> 'Condition':
+        """
+        Traverse/visit every filter in the condition, either on the current condition, or on a deep copy.
+        The condition used will be returned, which is either this one, or a duplicate.
+        Note, a filter here is of the form { field: ..., operator: ..., value: ... }, ignoring "and", "not", and "or"
+        conditions
+        :param callback: A function that will be called and passed the current filter in the traversal
+        :param on_duplicate:
+        """
+        condition = self.clone(True) if on_duplicate else self
+        for f in condition:
+            callback(f)
+
+        return condition
 
 
 class ValueLessCondition:
@@ -135,93 +144,121 @@ class ValueLessCondition:
         self.op = op
 
     def value(self, value: any) -> Condition:
-        return Condition(self.field, self.op, value)
+        if isinstance(value, Key):
+            return Condition(self.field, self.op, {"query": value.field})
+        else:
+            return Condition(self.field, self.op, value)
 
 
 class Key:
     def __init__(self, field: str):
         self.field = field
 
-    def __gt__(self, other):
-        return Condition(self.field, ">", other)
+    def _build(self, op, other) -> Condition:
+        if isinstance(other, Key):
+            return Condition(self.field, op, {"query": other.field})
+        else:
+            return Condition(self.field, op, other)
 
-    def gt(self, other):
+    def __gt__(self, other) -> Condition:
+        return self._build(">", other)
+
+    def gt(self, other) -> Condition:
         return self > other
 
-    def __lt__(self, other):
-        return Condition(self.field, "<", other)
+    def __lt__(self, other) -> Condition:
+        return self._build("<", other)
 
-    def lt(self, other):
+    def lt(self, other) -> Condition:
         return self < other
 
-    def __ge__(self, other):
-        return Condition(self.field, ">=", other)
+    def __ge__(self, other) -> Condition:
+        return self._build(">=", other)
 
-    def gte(self, other):
+    def gte(self, other) -> Condition:
         return self >= other
 
-    def __le__(self, other):
-        return Condition(self.field, "<=", other)
+    def __le__(self, other) -> Condition:
+        return self._build("<=", other)
 
-    def lte(self, other):
+    def lte(self, other) -> Condition:
         return self <= other
 
-    def __eq__(self, other):
-        return Condition(self.field, "==", other)
+    def __eq__(self, other) -> Condition:
+        return self._build("==", other)
 
-    def eq(self, other):
+    def eq(self, other) -> Condition:
         return self == other
 
-    def __ne__(self, other):
-        return Condition(self.field, "!=", other)
+    def __ne__(self, other) -> Condition:
+        return self._build("!=", other)
 
-    def ne(self, other):
+    def ne(self, other) -> Condition:
         return self != other
 
-    def seq(self, other):
-        return Condition(self.field, "===", other)
+    def seq(self, other) -> Condition:
+        return self._build("===", other)
 
-    def sne(self, other):
-        return Condition(self.field, "!==", other)
+    def sne(self, other) -> Condition:
+        return self._build("!==", other)
 
-    def in_(self, other):
-        return Condition(self.field, "in", other)
+    def is_true(self) -> Condition:
+        return self._build("===", True)
 
-    def nin(self, other):
-        return Condition(self.field, "!in", other)
+    def is_false(self) -> Condition:
+        return self._build("===", False)
 
-    def contains(self, other):
-        return Condition(self.field, "contains", other)
+    def is_null(self) -> Condition:
+        return self._build("===", None)
 
-    def not_contains(self, other):
-        return Condition(self.field, "!contains", other)
+    def in_(self, other) -> Condition:
+        return self._build("in", other)
 
-    def interval(self, *values):
-        return Condition(self.field, "interval", values[0] if len(values) == 1 else values)
+    def nin(self, other) -> Condition:
+        return self._build("!in", other)
 
-    def not_interval(self, *values):
-        return Condition(self.field, "!interval", values[0] if len(values) == 1 else values)
+    def contains(self, other) -> Condition:
+        return self._build("contains", other)
 
-    def startswith(self, other):
-        return Condition(self.field, "startswith", other)
+    def not_contains(self, other) -> Condition:
+        return self._build("!contains", other)
 
-    def endswith(self, other):
-        return Condition(self.field, "endswith", other)
+    def subset(self, other) -> Condition:
+        return self._build('subset', other)
 
-    def present(self):
-        return Condition(self.field, "present", None)
+    def not_subset(self, other) -> Condition:
+        return self._build('!subset', other)
 
-    def not_present(self):
-        return Condition(self.field, "!present", None)
+    def superset(self, other) -> Condition:
+        return self._build('superset', other)
+
+    def not_superset(self, other) -> Condition:
+        return self._build('!superset', other)
+
+    def interval(self, *values) -> Condition:
+        return self._build("interval", values[0] if len(values) == 1 else values)
+
+    def not_interval(self, *values) -> Condition:
+        return self._build("!interval", values[0] if len(values) == 1 else values)
+
+    def startswith(self, other) -> Condition:
+        return self._build("startswith", other)
+
+    def endswith(self, other) -> Condition:
+        return self._build("endswith", other)
+
+    def present(self) -> Condition:
+        return self._build("present", None)
+
+    def not_present(self) -> Condition:
+        return self._build("!present", None)
 
     def operator(self, op: str) -> ValueLessCondition:
         return ValueLessCondition(self.field, op)
 
 
 class Filter:
-    MISSING = object()
-
-    _filters = {
+    FILTERS = {
         ">": lambda field, value: field > value,
         "<": lambda field, value: field < value,
         ">=": lambda field, value: field >= value,
@@ -233,8 +270,14 @@ class Filter:
 
         "in": lambda field, value: field in value,
         "!in": lambda field, value: field not in value,
+
         "contains": lambda field, value: value in field,
         "!contains": lambda field, value: value not in field,
+
+        "subset": lambda field, value: all(x in value for x in field),
+        "!subset": lambda field, value: any(x not in value for x in field),
+        "superset": lambda field, value: all(x in field for x in value),
+        "!superset": lambda field, value: any(x not in field for x in value),
 
         "interval": lambda field, value: value[0] <= field <= value[1],
         "!interval": lambda field, value: field < value[0] or value[1] < field,
@@ -242,8 +285,8 @@ class Filter:
         "startswith": lambda field, value: field.startswith(value),
         "endswith": lambda field, value: field.endswith(value),
 
-        "present": lambda field, _: field is not Filter.MISSING,
-        "!present": lambda field, _: field is Filter.MISSING,
+        "present": lambda field, _: field is not Query.MISSING,
+        "!present": lambda field, _: field is Query.MISSING,
     }
 
     def __init__(self, filters: Union[Condition, List[dict]], convert_ints: bool = True,
@@ -277,8 +320,13 @@ class Filter:
                 out.update(self._preprocess(f["or"], convert_ints))
             elif "not" in f:
                 out.update(self._preprocess(f["not"], convert_ints))
-            elif f["field"] not in out:
-                out[f["field"]] = Query(f["field"], fallback=self.MISSING, convert_ints=convert_ints)
+            else:
+                if f["field"] not in out:
+                    out[f["field"]] = Query(f["field"], fallback=Query.MISSING, convert_ints=convert_ints)
+                if isinstance(f["value"], dict) and 'query' in f['value'] and f['value']['query'] not in out:
+                    out[f['value']['query']] = Query(
+                        f['value']['query'], fallback=Query.MISSING, convert_ints=convert_ints
+                    )
 
         return out
 
@@ -289,21 +337,27 @@ class Filter:
         overall = None
         for f in filters:
             if isinstance(f, list):
-                c = self._filter(item, f, oring, context)
+                c = self._filter(item, f, False, context)
             elif "or" in f:
                 c = self._filter(item, f["or"], True, context)
             elif "not" in f:
-                c = not self._filter(item, f["not"], oring, context)
+                c = not self._filter(item, f["not"], False, context)
             else:
                 query_result = self.queries[f["field"]].single(item, context)
-                if query_result is self.MISSING and f["operator"] not in ("present", "!present"):
+                if isinstance(f['value'], dict) and 'query' in f['value']:
+                    value = self.queries[f['value']['query']].single(item, context)
+                else:
+                    value = f['value']
+
+                if query_result is Query.MISSING and f["operator"] not in ("present", "!present"):
                     c = self.missing_field_response
                 else:
-                    c = self._filters[f["operator"]](query_result, f["value"])
+                    c = self.FILTERS[f["operator"]](query_result, value)
 
             if overall is None:
                 overall = c
-            elif "or" in f or oring:
+
+            if oring:
                 overall = c or overall
 
                 if overall:  # shortcut or
@@ -338,6 +392,54 @@ class Filter:
             item for index, item in enumerate(items)
             if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)})
         ]
+
+    def first(self, items: List[any], context: dict = None) -> Union[any, None]:
+        """
+        Return the first item that matches the filters.
+        Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
+        :param items:
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
+        :return: The first item that matched the filters
+        """
+        for index, item in enumerate(items):
+            if self._filter(item, None, False, {"INDEX": index, **({} if context is None else context)}):
+                return item
+        else:
+            return None
+
+    def last(self, items: List[any], context: dict = None) -> Union[any, None]:
+        """
+        Return the last item that matches the filters.
+        Adds 'INDEX' to the query space which is the 0-base index of the item being filtered
+        :param items:
+        :param context: An additional namespace that will be searched if a top-level field name cannot
+            be found on the item
+        :return: The last item that matched the filters
+        """
+        for i in range(len(items)):
+            ai = len(items)-1-i
+            if self._filter(items[ai], None, False, {"INDEX": ai, **({} if context is None else context) }):
+                return items[ai]
+        else:
+            return None
+
+    @classmethod
+    def register_filter(cls, op, func: Callable[[any, any], bool]) -> bool:
+        """
+        Register a new filter.
+        :param op: The operator identifying this filter.
+        :param func: The function to determine whether the filter has been met or not.
+            Will be passed two values: (field_value, filter_value) and must return
+            a boolean indicating whether the filter was met or not.
+        :return: Whether the filter could be registered or not
+        """
+        if op not in cls.FILTERS:
+            cls.FILTERS[op] = func
+            return True
+        else:
+            logger.warning(f"{op} is already registered as a filter")
+            return False
 
 
 if __name__ == "__main__":
