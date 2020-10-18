@@ -1,6 +1,5 @@
 from typing import Type
 from antlr4 import *
-from antlr4.IntervalSet import IntervalSet
 from antlr4.Token import CommonToken
 from antlr4.error.ErrorStrategy import DefaultErrorStrategy
 from antlr4.error.Errors import InputMismatchException

@@ -417,7 +417,12 @@ class Filter:
             be found on the item
         :return: The last item that matched the filters
         """
-        return self.first(items[::-1], context=context)
+        for i in range(len(items)):
+            ai = len(items)-1-i
+            if self._filter(items[ai], None, False, {"INDEX": ai, **({} if context is None else context) }):
+                return items[ai]
+        else:
+            return None
 
     @classmethod
     def register_filter(cls, op, func: Callable[[any, any], bool]) -> bool:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jtools import Query, SpecialNotFoundError, __version__
+from jtools import Query, Filter, Key, SpecialNotFoundError, __version__
 
 folder = Path(__file__).parent
 with open(folder / "data/10000.json", "r") as file:
@@ -696,7 +696,7 @@ class TestGetter(unittest.TestCase):
                         ['index', 'balance'],
                         ['range', 1],
                         ['replace', {'old': ',', 'new': ''}],
-                        ['float']
+                        'float'
                     ]
                 ).$min
             """).single(small_data)
@@ -711,6 +711,43 @@ class TestGetter(unittest.TestCase):
         self.assertEqual(
             data['a']['b'],
             Query('a.$values.0').single(data)
+        )
+
+    def test_make_dict_special(self):
+        Query.register_special('make_dict', lambda value, *args, context, **kwargs: {
+            **kwargs, **{i: arg for i, arg in enumerate(args)}
+        })
+
+        self.assertEqual(
+            {0: True, 1: False, 2: None, 3: 3, 'bob': 'chill', 'jill': [1, 2]},
+            Query('$make_dict(true, false, null, 3, bob="chill", jill=[1, 2])').single({})
+        )
+
+    def test_filter_special(self):
+        self.assertEqual(
+            Filter(Key('latitude') < Key('longitude')).many(small_data),
+            Query('$filter("latitude", "<", { "query": "longitude" }, single=false)').single(small_data)
+        )
+
+        self.assertEqual(
+            Filter(Key('latitude') < Key('longitude')).many(small_data),
+            Query(
+                '$filter({ "field": "latitude", "operator": "<", "value": { "query": "longitude" }}, single=false)'
+            ).single(small_data)
+        )
+
+        self.assertEqual(
+            Filter(Key('latitude') < Key('longitude')).many(small_data),
+            Query(
+                '$filter([{ "field": "latitude", "operator": "<", "value": { "query": "longitude" }}], single=false)'
+            ).single(small_data)
+        )
+
+        self.assertEqual(
+            Filter(Key('latitude') < Key('longitude')).single(small_data[1]),
+            Query(
+                '$filter([{ "field": "latitude", "operator": "<", "value": { "query": "longitude" }}])'
+            ).single(small_data[1])
         )
 
 
